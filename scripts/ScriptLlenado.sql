@@ -1,6 +1,5 @@
 USE ServiciosDB;
 
-SET IDENTITY_INSERT dbo.TipoMovConsumo ON;
 INSERT INTO dbo.TipoMovConsumo (
 	[ID]
 	, [Nombre]
@@ -9,7 +8,6 @@ INSERT INTO dbo.TipoMovConsumo (
 	, (2, 'Credito por ajuste')
 	, (3, 'Debito por ajuste');
 
-SET IDENTITY_INSERT dbo.TipoUsoPropiedad ON;
 INSERT INTO dbo.TipoUsoPropiedad (
 	[ID]
 	, [Nombre]
@@ -20,7 +18,6 @@ INSERT INTO dbo.TipoUsoPropiedad (
 	, (4, 'Lote baldio')
 	, (5, 'Agricola');
 
-SET IDENTITY_INSERT dbo.TipoAreaPropiedad ON;
 INSERT INTO dbo.TipoAreaPropiedad (
 	[ID]
 	, [Nombre]
@@ -31,7 +28,6 @@ INSERT INTO dbo.TipoAreaPropiedad (
 	, (4, 'Zona industrial')
 	, (5, 'Zona comercial');
 
-SET IDENTITY_INSERT dbo.TipoUsuario ON;
 INSERT INTO dbo.TipoUsuario(
 	[ID]
 	, [Nombre]
@@ -39,7 +35,6 @@ INSERT INTO dbo.TipoUsuario(
 	(1, 'Administrador')
 	, (2, 'Propietario');
 
-SET IDENTITY_INSERT dbo.TipoAsociacion ON;
 INSERT INTO dbo.TipoAsociacion(
 	[ID]
 	, [Nombre]
@@ -47,7 +42,6 @@ INSERT INTO dbo.TipoAsociacion(
 	(1, 'Asociar')
 	, (2, 'Desasociar');
 
-SET IDENTITY_INSERT dbo.TipoMedioPago ON;
 INSERT INTO dbo.TipoMedioPago (
 	[ID]
 	, [Nombre]
@@ -55,7 +49,6 @@ INSERT INTO dbo.TipoMedioPago (
 	(1, 'Efectivo')
 	, (2, 'Tarjeta');
 
-SET IDENTITY_INSERT dbo.CCPeriodoCobro ON;
 INSERT INTO dbo.CCPeriodoCobro (
 	[ID]
 	, [Nombre]
