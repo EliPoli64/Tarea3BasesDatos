@@ -1,14 +1,15 @@
 CREATE OR ALTER PROCEDURE dbo.FacturaObtenerPendienteMasAntigua
-	@inIDPropiedad INT
-	, @inUserName VARCHAR(32)
-	, @inIP VARCHAR(32)
-	, @outResultCode INT OUTPUT
+	@inIDPropiedad 		INT
+	, @inUserName 		VARCHAR(32)
+	, @inIP 			VARCHAR(32)
+	, @outResultCode 	INT OUTPUT
 AS
 BEGIN
 	SET NOCOUNT ON;
-	DECLARE @descripcionEvento VARCHAR(256);
-	DECLARE @resultBitacora INT;
-	DECLARE @tipoEvento INT = 2;
+	DECLARE @descripcionEvento 	VARCHAR(256);
+	DECLARE @resultBitacora 	INT;
+	DECLARE @tipoEvento 		INT = 2; -- flag para determinar si hay error o no, "Calcular moratorios" por default
+	 
 	SET @outResultCode = 0;
 	SET @descripcionEvento = 'Exito: Se obtuvo la factura pendiente de '
 							+ CAST(@inIDPropiedad AS VARCHAR) 
