@@ -80,3 +80,78 @@ INSERT INTO dbo.TipoEvento (
 	, (13, 'Logout usuario')
 	, (14, 'Modificacion datos')
 	, (15, 'Proceso masivo');
+
+INSERT INTO dbo.ConceptoCobro (
+	[ID]
+	, [Nombre]
+	, [Activo]
+) VALUES
+	(1, 'Consumo Agua', 1)
+	, (2, 'Impuesto a propiedad', 1)
+	, (3, 'Recoleccion Basura', 1)
+	, (4, 'Patente Comercial', 1)
+	, (5, 'Reconexion', 1)
+	, (6, 'Intereses Moratorios', 1)
+	, (7, 'Mantenimiento Parques', 1);
+
+INSERT INTO dbo.CCTipoMonto (
+	[ID]
+	, [Nombre]
+) VALUES
+	(1, 'Monto Fijo')
+	, (2, 'Monto Variable')
+	, (3, 'Monto Porcentual');
+
+INSERT INTO dbo.CCBaseCalculo (
+	[ID]
+	, [Nombre]
+) VALUES
+	(1, 'Valor propiedad')
+	, (2, 'Area propiedad')
+	, (3, 'Consumo agua')
+	, (4, 'Monto factura');
+
+INSERT INTO dbo.CCTarifa (
+	[ID]
+	, [IDCC]
+	, [IDPeriodoCobro]
+	, [IDTipoMonto]
+	, [VigenciaDesde]
+	, [VigenciaHasta]
+) VALUES
+	(1, 1, 1, 2, '2022-01-01', '2099-12-31')
+	, (2, 2, 4, 3, '2022-01-01', '2099-12-31')
+	, (3, 3, 1, 1, '2022-01-01', '2099-12-31')
+	, (4, 4, 3, 1, '2022-01-01', '2099-12-31')
+	, (5, 5, 5, 1, '2022-01-01', '2099-12-31')
+	, (6, 6, 6, 3, '2022-01-01', '2099-12-31')
+	, (7, 7, 4, 1, '2022-01-01', '2099-12-31');
+
+INSERT INTO dbo.CCAgua (
+	[ID]
+	, [IDTarifa]
+	, [CostoM3]
+	, [M3TarifaMinima]
+	, [M3Minimo]
+	, [IncluyeBase]
+) VALUES
+	(1, 1, 1000.00, 30.00, 5000.00, 1);
+
+INSERT INTO dbo.CCTarifaFija (
+	[ID]
+	, [IDTarifa]
+	, [Monto]
+) VALUES
+	(3, 3, 150.00)
+	, (4, 4, 25000.00)
+	, (5, 5, 30000.00)
+	, (7, 7, 2000.00);
+
+INSERT INTO dbo.CCTarifaPorcentual (
+	[ID]
+	, [IDTarifa]
+	, [Porcentaje]
+	, [IDBaseCalculo]
+) VALUES
+	(2, 2, 0.01, 1)
+	, (6, 6, 0.04, 4);
