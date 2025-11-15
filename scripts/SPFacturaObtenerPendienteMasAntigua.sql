@@ -18,7 +18,7 @@ BEGIN
 	BEGIN TRY
 		IF NOT EXISTS (SELECT 1 FROM dbo.Propiedad WHERE ID = @inIDPropiedad)
 		BEGIN
-			SET @outResultCode = 51234; -- por definir @outResultCode
+			SET @outResultCode = 50001; -- no encontrado
 			SET @descripcionEvento = 'Error: Propiedad '
 									+ CAST(@inIDPropiedad AS VARCHAR)
 									+ 'no encontrada al intentar obtener factura pendiente mas antigua';
@@ -43,7 +43,7 @@ BEGIN
 
 			IF @@ROWCOUNT = 0
 			BEGIN
-				SET @outResultCode = 51234; -- por definir @outResultCode
+				SET @outResultCode = 50009; -- no facturas pendientes
 				SET @descripcionEvento = 'No hay facturas pendientes para la propiedad ' 
 										+ CAST(@inIDPropiedad AS VARCHAR) 
 										+ ' al intentar obtener la mas antigua';
@@ -64,7 +64,7 @@ BEGIN
 
 	END TRY
 	BEGIN CATCH
-		SET @outResultCode = 50008; -- creo que este lo podemos dejar asi para error de bd
+		SET @outResultCode = 50008; -- error bd
 		INSERT INTO dbo.DBError (
 			[UserName]
 			, [Number]

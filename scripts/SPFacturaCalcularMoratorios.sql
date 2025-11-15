@@ -26,7 +26,7 @@ BEGIN
 
 		IF NOT EXISTS (SELECT 1 FROM dbo.Factura WHERE ID = @inIDFactura)
 		BEGIN
-			SET @outResultCode = 51234; -- outResultCode placeholder
+			SET @outResultCode = 50001; -- no encontrado
 			SET @descripcionEvento = 'Error: Factura '
 									+ CAST(@inIDFactura AS VARCHAR) 
 									+ ' no encontrada al intentar calcular moratorios';
@@ -42,7 +42,7 @@ BEGIN
 
 			IF @fechaOperacion <= @fechaLimite
 			BEGIN
-				SET @outResultCode = 51234; -- outResultCode placeholder
+				SET @outResultCode = 50004; -- estado no valido
 				SET @descripcionEvento = 'Error: La factura '
 										+ CAST(@inIDFactura AS VARCHAR) 
 										+ ' no esta vencida, no aplican moratorios';
@@ -57,7 +57,7 @@ BEGIN
 
 			IF @outMontoMoratorios <= 0
 			BEGIN
-				SET @outResultCode = 51234; -- outResultCode placeholder
+				SET @outResultCode = 50002; -- validacion fallida
 				SET @descripcionEvento = 'Error: El calculo de moratorios de la factura '
 										+ CAST(@inIDFactura AS VARCHAR) 
 										+ ' resulto en monto invalido';
@@ -105,7 +105,7 @@ BEGIN
 			ROLLBACK TRANSACTION;
 		END;
 
-		SET @outResultCode = 50008;
+		SET @outResultCode = 50008; -- error bd
 		INSERT INTO dbo.DBError (
 			[UserName]
 			, [Number]

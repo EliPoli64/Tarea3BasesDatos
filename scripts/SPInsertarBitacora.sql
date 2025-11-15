@@ -1,9 +1,9 @@
 CREATE OR ALTER PROCEDURE dbo.InsertarBitacora
-	@inIP VARCHAR(32)
-	, @inUsuario VARCHAR(32)
-	, @inDescripcion VARCHAR(256)
-	, @inTipoEvento INT
-	, @outResultCode INT OUTPUT
+	@inIP 				VARCHAR(32)
+	, @inUsuario 		VARCHAR(32)
+	, @inDescripcion 	VARCHAR(256)
+	, @inTipoEvento 	INT
+	, @outResultCode 	INT OUTPUT
 AS
 BEGIN
 	SET NOCOUNT ON;
@@ -32,6 +32,8 @@ BEGIN
 	END TRY
 	BEGIN CATCH
 
+		SET @outResultCode = 50008; -- error bd
+
 		INSERT INTO dbo.DBError (
 			[UserName]
 			, [Number]
@@ -51,8 +53,6 @@ BEGIN
 			, ERROR_MESSAGE()
 			, GETDATE()
 		);
-
-		SET @outResultCode = 50008; -- error bd
 	
 	END CATCH
 	SET NOCOUNT OFF;

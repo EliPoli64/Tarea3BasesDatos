@@ -155,3 +155,25 @@ INSERT INTO dbo.CCTarifaPorcentual (
 ) VALUES
 	(2, 2, 0.01, 1)
 	, (6, 6, 0.04, 4);
+
+INSERT INTO dbo.Error (
+	[ID]
+	, [Codigo]
+	, [Descripcion]
+) VALUES
+	(1, 50000, 'Error Generico')
+	, (2, 50001, 'No encontrado')
+	, (3, 50002, 'Validacion Fallida')
+	, (4, 50003, 'Problema con la confirmacion')
+	, (5, 50004, 'Estado no valido')
+	, (6, 50005, 'ID duplicada')
+	, (7, 50006, 'Usuario o contraseña mal en el login')
+	, (8, 50007, 'Problema XML')
+	, (9, 50008, 'Error BD')
+	, (10, 50009, 'No hay facturas pendientes')
+	, (11, 50010, 'Corte no procede')
+	, (12, 50011, 'Reconexion no procede')
+	, (13, 50012, 'Sin Cambios')
+	, (14, 50013, 'Medio de pago invalido')
+	, (15, 50014, 'No hay tarifa vigente')
+	, (16, 50015, 'Ya existe la factura');
