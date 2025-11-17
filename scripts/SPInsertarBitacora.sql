@@ -3,19 +3,17 @@ CREATE OR ALTER PROCEDURE dbo.InsertarBitacora
 	, @inUsuario 		VARCHAR(32)
 	, @inDescripcion 	VARCHAR(256)
 	, @inTipoEvento 	INT
-	, @outResultCode 	INT OUTPUT
 AS
 BEGIN
 	SET NOCOUNT ON;
 	BEGIN TRY
-		SET @outResultCode = 0;  -- no error code
 
 		DECLARE @userID INT;
 		SELECT @userID = U.ID
 			FROM dbo.Usuario U
 			WHERE U.UserName = @inUsuario;
 
-		INSERT INTO dbo.BitacoraEvento (	
+		INSERT INTO dbo.Bitacora (	
 			PostInIP
 			, [IDPostByUser]
 			, Descripcion
@@ -31,8 +29,6 @@ BEGIN
 
 	END TRY
 	BEGIN CATCH
-
-		SET @outResultCode = 50008; -- error bd
 
 		INSERT INTO dbo.DBError (
 			[UserName]
