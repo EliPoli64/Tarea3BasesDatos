@@ -1,4 +1,4 @@
-CREATE OR ALTER PROCEDURE dbo.spXML_ProcesarCCPropiedad
+CREATE OR ALTER PROCEDURE dbo.XMLProcesarCCPropiedad
 	@Xml XML,
 	@inUserName VARCHAR(32),
 	@inIP VARCHAR(32),
@@ -98,8 +98,8 @@ BEGIN
             FROM @Movimientos AS M
             LEFT JOIN dbo.PropiedadXCC AS PX
                 ON PX.IDPropiedad = M.IDPropiedad
-                AND PX.IDCC       = M.IDCC
-                AND PX.Activo     = 1
+                AND PX.IDCC = M.IDCC
+                AND PX.Activo = 1
             WHERE M.TipoAso = 2
               AND PX.ID IS NULL
         )
@@ -175,8 +175,7 @@ FinCCProp:
             @inIP,
             @inUserName,
             @descripcionEvento,
-            @tipoEvento,
-            @resultBitacora OUTPUT;
+            @tipoEvento
     END TRY
     BEGIN CATCH
 
