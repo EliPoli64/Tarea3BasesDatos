@@ -1,115 +1,92 @@
-USE ServiciosDB;
+DECLARE @xml XML;
+
+SELECT @xml = BulkColumn
+FROM OPENROWSET(BULK 'C:\Users\Elias\projs\Tarea3BasesDatos\XMLs\CatalogosP3.xml', SINGLE_BLOB) AS x;
 
 INSERT INTO dbo.TipoMovConsumo (
 	[ID]
 	, [Nombre]
-) VALUES
-	(1, 'Debito por lectura')
-	, (2, 'Credito por ajuste')
-	, (3, 'Debito por ajuste');
+)
+SELECT 
+	TipoMov.value('@id', 'INT'),
+	TipoMov.value('@nombre', 'VARCHAR(32)')
+FROM @xml.nodes('/Catalogos/TipoMovimientoLecturaMedidor/TipoMov') AS T(TipoMov);
 
 INSERT INTO dbo.TipoUsoPropiedad (
 	[ID]
 	, [Nombre]
-) VALUES
-	(1, 'Habitacion')
-	, (2, 'Comercial')
-	, (3, 'Industrial')
-	, (4, 'Lote baldio')
-	, (5, 'Agricola');
+)
+SELECT 
+	TipoUso.value('@id', 'INT'),
+	TipoUso.value('@nombre', 'VARCHAR(32)')
+FROM @xml.nodes('/Catalogos/TipoUsoPropiedad/TipoUso') AS T(TipoUso);
 
 INSERT INTO dbo.TipoAreaPropiedad (
 	[ID]
 	, [Nombre]
-) VALUES
-	(1, 'Residencial')
-	, (2, 'Agricola')
-	, (3, 'Bosque')
-	, (4, 'Zona industrial')
-	, (5, 'Zona comercial');
+)
+SELECT 
+	TipoZona.value('@id', 'INT'),
+	TipoZona.value('@nombre', 'VARCHAR(32)')
+FROM @xml.nodes('/Catalogos/TipoZonaPropiedad/TipoZona') AS T(TipoZona);
 
 INSERT INTO dbo.TipoUsuario(
 	[ID]
 	, [Nombre]
-) VALUES
-	(1, 'Administrador')
-	, (2, 'Propietario');
+)
+SELECT 
+	TipoUser.value('@id', 'INT'),
+	TipoUser.value('@nombre', 'VARCHAR(32)')
+FROM @xml.nodes('/Catalogos/TipoUsuario/TipoUser') AS T(TipoUser);
 
 INSERT INTO dbo.TipoAsociacion(
 	[ID]
 	, [Nombre]
-) VALUES
-	(1, 'Asociar')
-	, (2, 'Desasociar');
+)
+SELECT 
+	TipoAso.value('@id', 'INT'),
+	TipoAso.value('@nombre', 'VARCHAR(32)')
+FROM @xml.nodes('/Catalogos/TipoAsociacion/TipoAso') AS T(TipoAso);
 
 INSERT INTO dbo.TipoMedioPago (
 	[ID]
 	, [Nombre]
-) VALUES
-	(1, 'Efectivo')
-	, (2, 'Tarjeta');
+)
+SELECT 
+	MedioPago.value('@id', 'INT'),
+	MedioPago.value('@nombre', 'VARCHAR(32)')
+FROM @xml.nodes('/Catalogos/TipoMedioPago/MedioPago') AS T(MedioPago);
 
 INSERT INTO dbo.CCPeriodoCobro (
 	[ID]
 	, [Nombre]
 	, [QDividir]
-) VALUES
-	(1, 'Mensual', 1)
-	, (2, 'Trimestral', 3)
-	, (3, 'Semestral', 6)
-	, (4, 'Anual', 12)
-	, (5, 'Unico no recurrente', 1)
-	, (6, 'Diario intereses moratorios', 30);
+)
+SELECT 
+	PeriodoMonto.value('@id', 'INT'),
+	PeriodoMonto.value('@nombre', 'VARCHAR(32)'),
+	COALESCE(PeriodoMonto.value('@dias', 'INT'), PeriodoMonto.value('@qMeses', 'INT'))
+FROM @xml.nodes('/Catalogos/PeriodoMontoCC/PeriodoMonto') AS T(PeriodoMonto);
 
-INSERT INTO dbo.TipoEvento (
+INSERT INTO dbo.CCTipoMonto (
 	[ID]
 	, [Nombre]
-) VALUES
-	(1, 'Consulta propiedad')
-	, (2, 'Consulta factura')
-	, (3, 'Calculo moratorios')
-	, (4, 'Pago factura')
-	, (5, 'Generacion factura')
-	, (6, 'Lectura medidor')
-	, (7, 'Orden corte agua')
-	, (8, 'Orden reconexion')
-	, (9, 'Asociacion propiedad')
-	, (10, 'Cambio valor propiedad')
-	, (11, 'Error sistema')
-	, (12, 'Login usuario')
-	, (13, 'Logout usuario')
-	, (14, 'Modificacion datos')
-	, (15, 'Proceso masivo');
+)
+SELECT 
+	TipoMonto.value('@id', 'INT'),
+	TipoMonto.value('@nombre', 'VARCHAR(32)')
+FROM @xml.nodes('/Catalogos/TipoMontoCC/TipoMonto') AS T(TipoMonto);
 
 INSERT INTO dbo.ConceptoCobro (
 	[ID]
 	, [Nombre]
 	, [Activo]
-) VALUES
-	(1, 'Consumo Agua', 1)
-	, (2, 'Impuesto a propiedad', 1)
-	, (3, 'Recoleccion Basura', 1)
-	, (4, 'Patente Comercial', 1)
-	, (5, 'Reconexion', 1)
-	, (6, 'Intereses Moratorios', 1)
-	, (7, 'Mantenimiento Parques', 1);
-
-INSERT INTO dbo.CCTipoMonto (
-	[ID]
-	, [Nombre]
-) VALUES
-	(1, 'Monto Fijo')
-	, (2, 'Monto Variable')
-	, (3, 'Monto Porcentual');
-
-INSERT INTO dbo.CCBaseCalculo (
-	[ID]
-	, [Nombre]
-) VALUES
-	(1, 'Valor propiedad')
-	, (2, 'Area propiedad')
-	, (3, 'Consumo agua')
-	, (4, 'Monto factura');
+)
+SELECT 
+	CC.value('@id', 'INT'),
+	CC.value('@nombre', 'VARCHAR(32)'),
+	1
+FROM @xml.nodes('/Catalogos/CCs/CC') AS T(CC);
 
 INSERT INTO dbo.CCTarifa (
 	[ID]
@@ -118,14 +95,15 @@ INSERT INTO dbo.CCTarifa (
 	, [IDTipoMonto]
 	, [VigenciaDesde]
 	, [VigenciaHasta]
-) VALUES
-	(1, 1, 1, 2, '2022-01-01', '2099-12-31')
-	, (2, 2, 4, 3, '2022-01-01', '2099-12-31')
-	, (3, 3, 1, 1, '2022-01-01', '2099-12-31')
-	, (4, 4, 3, 1, '2022-01-01', '2099-12-31')
-	, (5, 5, 5, 1, '2022-01-01', '2099-12-31')
-	, (6, 6, 6, 3, '2022-01-01', '2099-12-31')
-	, (7, 7, 4, 1, '2022-01-01', '2099-12-31');
+)
+SELECT 
+	CC.value('@id', 'INT'),
+	CC.value('@id', 'INT'),
+	CC.value('@PeriodoMontoCC', 'INT'),
+	CC.value('@TipoMontoCC', 'INT'),
+	'2022-01-01',
+	'2099-12-31'
+FROM @xml.nodes('/Catalogos/CCs/CC') AS T(CC);
 
 INSERT INTO dbo.CCAgua (
 	[ID]
@@ -134,46 +112,44 @@ INSERT INTO dbo.CCAgua (
 	, [M3TarifaMinima]
 	, [M3Minimo]
 	, [IncluyeBase]
-) VALUES
-	(1, 1, 1000.00, 30.00, 5000.00, 1);
+)
+SELECT 
+	1,
+	1,
+	CC.value('@ValorFijoM3Adicional', 'MONEY'),
+	CC.value('@ValorMinimoM3', 'MONEY'),
+	CC.value('@ValorMinimo', 'MONEY'),
+	1
+FROM @xml.nodes('/Catalogos/CCs/CC[@id=1]') AS T(CC);
 
 INSERT INTO dbo.CCTarifaFija (
 	[ID]
 	, [IDTarifa]
 	, [Monto]
-) VALUES
-	(3, 3, 150.00)
-	, (4, 4, 25000.00)
-	, (5, 5, 30000.00)
-	, (7, 7, 2000.00);
+)
+SELECT 
+	CC.value('@id', 'INT'),
+	CC.value('@id', 'INT'),
+	CC.value('@ValorFijo', 'MONEY')
+FROM @xml.nodes('/Catalogos/CCs/CC') AS T(CC)
+WHERE CC.value('@TipoMontoCC', 'INT') = 1 
+AND CC.value('@ValorFijo', 'VARCHAR(32)') != '';
 
 INSERT INTO dbo.CCTarifaPorcentual (
 	[ID]
 	, [IDTarifa]
 	, [Porcentaje]
 	, [IDBaseCalculo]
-) VALUES
-	(2, 2, 0.01, 1)
-	, (6, 6, 0.04, 4);
-
-INSERT INTO dbo.Error (
-	[ID]
-	, [Codigo]
-	, [Descripcion]
-) VALUES
-	(1, 50000, 'Error Generico')
-	, (2, 50001, 'No encontrado')
-	, (3, 50002, 'Validacion Fallida')
-	, (4, 50003, 'Problema con la confirmacion')
-	, (5, 50004, 'Estado no valido')
-	, (6, 50005, 'ID duplicada')
-	, (7, 50006, 'Usuario o contraseña mal en el login')
-	, (8, 50007, 'Problema XML')
-	, (9, 50008, 'Error BD')
-	, (10, 50009, 'No hay facturas pendientes')
-	, (11, 50010, 'Corte no procede')
-	, (12, 50011, 'Reconexion no procede')
-	, (13, 50012, 'Sin Cambios')
-	, (14, 50013, 'Medio de pago invalido')
-	, (15, 50014, 'No hay tarifa vigente')
-	, (16, 50015, 'Ya existe la factura');
+)
+SELECT 
+	CC.value('@id', 'INT'),
+	CC.value('@id', 'INT'),
+	CC.value('@ValorPorcentual', 'DECIMAL(18,4)'),
+	CASE 
+		WHEN CC.value('@id', 'INT') = 3 THEN 1
+		WHEN CC.value('@id', 'INT') = 7 THEN 4
+		ELSE 1
+	END
+FROM @xml.nodes('/Catalogos/CCs/CC') AS T(CC)
+WHERE CC.value('@TipoMontoCC', 'INT') = 3 
+AND CC.value('@ValorPorcentual', 'VARCHAR(32)') != '';
