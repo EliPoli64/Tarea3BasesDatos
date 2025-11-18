@@ -55,12 +55,14 @@ BEGIN
             ID
             , Nombre
             , ValorDocumentoId
-            , Telefono)
+            , Telefono
+            , EsActivo)
         SELECT
             @BaseID + PX.RowNum
             , PX.Nombre
             , PX.ValorDocumento
             , PX.Telefono
+            , 1
         FROM PersonasXml AS PX;
         COMMIT TRAN;
 

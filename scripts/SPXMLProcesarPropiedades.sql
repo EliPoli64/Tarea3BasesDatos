@@ -67,7 +67,8 @@ BEGIN
             SaldoM3,
             SaldoM3UltimaFactura,
             NumMedidor,
-            UltimaLecturaMedidor)
+            UltimaLecturaMedidor,
+            EsActivo)
         SELECT
             @BaseID + PX.RowNum,
             PX.NumFinca,
@@ -79,7 +80,8 @@ BEGIN
             0,
             0,
             PX.NumMedidor,
-            NULL 
+            NULL,
+            1
         FROM PropiedadesXml AS PX;
         COMMIT TRAN;
 
