@@ -7,24 +7,24 @@ AS
 BEGIN
     SET NOCOUNT ON;
     DECLARE @descripcionEvento  VARCHAR(256);
-    DECLARE @resultBitacora     INT;
-    DECLARE @tipoEvento         INT = 2;
-    DECLARE @BaseID             INT;
-    SET @outResultCode          = 0;
-    SET @descripcionEvento      = 'Éxito: Propiedades procesadas correctamente';
+    DECLARE @resultBitacora INT;
+    DECLARE @tipoEvento INT = 2;
+    DECLARE @BaseID INT;
+    SET @outResultCode = 0;
+    SET @descripcionEvento = 'Éxito: Propiedades procesadas correctamente';
 
     BEGIN TRY
         IF @Xml IS NULL
            OR LEN(CAST(@Xml AS NVARCHAR(MAX))) = 0
         BEGIN
-            SET @outResultCode     = 50002;
+            SET @outResultCode = 50002;
             SET @descripcionEvento = 'Error: XML de Propiedades está vacío';
             GOTO FinPropiedades;
         END;
 
         IF @Xml.exist('/Propiedades/Propiedad') = 0
         BEGIN
-            SET @outResultCode     = 50012;
+            SET @outResultCode = 50012;
             SET @descripcionEvento = 'Sin cambios: No hay nodos <Propiedad> en el XML';
             GOTO FinPropiedades;
         END;
@@ -35,7 +35,7 @@ BEGIN
             JOIN dbo.Propiedad AS PR ON PR.NumFinca = P.value('@numeroFinca', 'VARCHAR(16)')
         )
         BEGIN
-            SET @outResultCode     = 50005; -- ID duplicada
+            SET @outResultCode = 50005; -- ID duplicada
             SET @descripcionEvento = 'Error: Ya existe al menos una propiedad con la misma finca';
             GOTO FinPropiedades;
         END;
@@ -46,13 +46,13 @@ BEGIN
         WITH PropiedadesXml AS (
             SELECT
                 ROW_NUMBER() OVER (ORDER BY (SELECT 1)) AS RowNum,
-                P.value('@numeroFinca',      'VARCHAR(16)')  AS NumFinca,
-                P.value('@numeroMedidor',    'VARCHAR(32)')  AS NumMedidor,
-                P.value('@metrosCuadrados',  'DECIMAL(18,2)') AS Area,
-                P.value('@valorFiscal',      'DECIMAL(18,2)') AS ValorFiscal,
-                P.value('@tipoUsoId',        'INT')          AS TipoUsoID,
-                P.value('@tipoZonaId',       'INT')          AS TipoAreaID,
-                P.value('@fechaRegistro',    'DATE')         AS FechaReg
+                P.value('@numeroFinca', 'VARCHAR(16)')  AS NumFinca,
+                P.value('@numeroMedidor', 'VARCHAR(32)')  AS NumMedidor,
+                P.value('@metrosCuadrados', 'DECIMAL(18,2)') AS Area,
+                P.value('@valorFiscal', 'DECIMAL(18,2)') AS ValorFiscal,
+                P.value('@tipoUsoId', 'INT') AS TipoUsoID,
+                P.value('@tipoZonaId', 'INT') AS TipoAreaID,
+                P.value('@fechaRegistro', 'DATE') AS FechaReg
             FROM @Xml.nodes('/Propiedades/Propiedad') AS T(P)
         )
 
