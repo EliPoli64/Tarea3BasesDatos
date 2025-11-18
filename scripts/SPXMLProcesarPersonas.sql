@@ -52,15 +52,15 @@ BEGIN
         )
 		
         INSERT INTO dbo.Propietario (
-            ID,
-            Nombre,
-            ValorDocumentoId,
-            Telefono)
+            ID
+            , Nombre
+            , ValorDocumentoId
+            , Telefono)
         SELECT
-            @BaseID + PX.RowNum,
-            PX.Nombre,
-            PX.ValorDocumento,
-            PX.Telefono
+            @BaseID + PX.RowNum
+            , PX.Nombre
+            , PX.ValorDocumento
+            , PX.Telefono
         FROM PersonasXml AS PX;
         COMMIT TRAN;
 
@@ -71,10 +71,10 @@ FinPersonas:
         END;
 
         EXEC dbo.InsertarBitacora
-            @inIP,
-            @inUserName,
-            @descripcionEvento,
-            @tipoEvento;
+            @inIP
+            , @inUserName
+            , @descripcionEvento
+            , @tipoEvento;
     END TRY
     BEGIN CATCH
 
@@ -85,23 +85,23 @@ FinPersonas:
         SET @outResultCode = 50008;  -- ErrorBD
 
         INSERT INTO dbo.DBError(
-            [UserName],
-            [Number],
-            [State],
-            [Severity],
-            [Line],
-            [Procedure],
-            [Message],
-            [DateTime])
+            [UserName]
+            , [Number]
+            , [State]
+            , [Severity]
+            , [Line]
+            , [Procedure]
+            , [Message]
+            , [DateTime])
         VALUES(
-			SUSER_SNAME(),
-            ERROR_NUMBER(),
-            ERROR_STATE(),
-            ERROR_SEVERITY(),
-            ERROR_LINE(),
-            ERROR_PROCEDURE(),
-            ERROR_MESSAGE(),
-            GETDATE());
+			SUSER_SNAME()
+            , ERROR_NUMBER()
+            , ERROR_STATE()
+            , ERROR_SEVERITY()
+            , ERROR_LINE()
+            , ERROR_PROCEDURE()
+            , ERROR_MESSAGE()
+            , GETDATE());
     END CATCH;
 
     SET NOCOUNT OFF;

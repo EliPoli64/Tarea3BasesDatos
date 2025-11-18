@@ -95,8 +95,7 @@ BEGIN
 			@inIP
 			, @inUserName
 			, @descripcionEvento
-			, @tipoEvento
-			, @outResultCode = @resultBitacora OUTPUT;
+			, @tipoEvento;
 
 	END TRY
 	BEGIN CATCH
