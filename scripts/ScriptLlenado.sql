@@ -9,6 +9,15 @@ INSERT INTO dbo.Usuario (
 ) VALUES
 	(1, 'elipoli', '12341234', 1, 1);
 
+INSERT INTO dbo.ParametrosSistema (
+	ID
+	, Nombre
+	, Valor
+) VALUES
+	(1, 'DiasVencimientoFactura', '15')
+	, (2, 'DiasCorteAgua', '10')
+;
+
 DECLARE @xml XML;
 
 SELECT @xml = BulkColumn
