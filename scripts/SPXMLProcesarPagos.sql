@@ -1,4 +1,4 @@
-CREATE OR ALTER PROCEDURE dbo.spXML_ProcesarPagos
+CREATE OR ALTER PROCEDURE dbo.XMLProcesarPagos
 	@Xml XML, 
 	@FechaOperacion DATE,
 	@inUserName VARCHAR(32),
@@ -114,7 +114,7 @@ BEGIN
             WHERE IDFactura IS NULL
         )
         BEGIN
-            SET @outResultCode     = 50009;  -- No hay facturas pendientes
+            SET @outResultCode = 50009;  -- No hay facturas pendientes
             SET @descripcionEvento = 'Error: Al menos una propiedad de Pagos no tiene factura pendiente';
             GOTO FinPagos;
         END;
@@ -150,24 +150,24 @@ BEGIN
         FROM @Pagos AS P
         WHERE P.MontoIntereses > 0;
 
-        ;WITH CortesAReconectar AS (
-            SELECT DISTINCT
-                  P.IDPropiedad,
-                  P.OrdenCorteID
-            FROM @Pagos AS P
-            WHERE P.OrdenCorteID IS NOT NULL
-        ),
-        CortesQueProceden AS (
-            SELECT C.*
-            FROM CortesAReconectar AS C
-            WHERE NOT EXISTS (
+        DECLARE @CortesQueProceden TABLE
+        (
+            OrdenCorteID INT PRIMARY KEY
+        ) ;
+
+        INSERT INTO @CortesQueProceden (OrdenCorteID)
+        SELECT DISTINCT
+               P.OrdenCorteID
+        FROM @Pagos AS P
+        WHERE P.OrdenCorteID IS NOT NULL
+          AND NOT EXISTS (
                 SELECT 1
                 FROM dbo.Factura AS F2
-                WHERE F2.IDPropiedad = C.IDPropiedad
-					AND F2.EstadoFactura = 0
-					AND F2.FechaLimitePago < @FechaOperacion
-            )
-        )
+                WHERE F2.IDPropiedad   = P.IDPropiedad
+                  AND F2.EstadoFactura = 0
+                  AND F2.FechaLimitePago < @FechaOperacion
+          ) ;
+
         INSERT INTO dbo.OrdenReconexion(
             ID,
             Fecha,
@@ -177,16 +177,13 @@ BEGIN
             C.OrdenCorteID,
             @FechaOperacion,
             C.OrdenCorteID
-        FROM CortesQueProceden AS C;
+        FROM @CortesQueProceden AS C;
 
         UPDATE OC
         SET OC.Estado = 1
         FROM dbo.OrdenCorte AS OC
-        JOIN (
-            SELECT DISTINCT OrdenCorteID
-            FROM CortesQueProceden
-        ) AS X
-            ON OC.ID = X.OrdenCorteID;
+        JOIN @CortesQueProceden AS C
+            ON OC.ID = C.OrdenCorteID;
 
         INSERT INTO dbo.ComprobantePago(
             Fecha,
@@ -211,9 +208,7 @@ FinPagos:
             @inIP,
             @inUserName,
             @descripcionEvento,
-            @tipoEvento,
-            @resultBitacora OUTPUT;
-
+            @tipoEvento
     END TRY
     BEGIN CATCH
 
