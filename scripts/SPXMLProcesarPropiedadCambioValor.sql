@@ -5,7 +5,7 @@ CREATE OR ALTER PROCEDURE dbo.XMLProcesarPropiedadCambioValor
     @outResultCode INT OUTPUT
 AS
 BEGIN
-    SET NOCOUNT ON ;
+    SET NOCOUNT ON;
 
     DECLARE @descripcionEvento VARCHAR(256) ;
     DECLARE @resultBitacora INT ;
@@ -30,6 +30,7 @@ BEGIN
             GOTO FinCambioValor ;
         END ;
 
+        -- Tabla temporal para almacenar los cambios
         DECLARE @Cambios TABLE
         (
             NumFinca VARCHAR(16),
@@ -37,6 +38,7 @@ BEGIN
             IDPropiedad INT
         ) ;
 
+        -- Extraer datos del XML con la estructura correcta
         INSERT INTO @Cambios
         (
             NumFinca,
@@ -44,13 +46,14 @@ BEGIN
             IDPropiedad
         )
         SELECT
-            C.value('@numeroFinca', 'VARCHAR(16)')  AS NumFinca,
-            C.value('@nuevoValor','DECIMAL(18,2)') AS NuevoValor,
-            P.ID                                         AS IDPropiedad
+            C.value('@numeroFinca', 'VARCHAR(16)') AS NumFinca,
+            C.value('@nuevoValor', 'DECIMAL(18,2)') AS NuevoValor,
+            P.ID AS IDPropiedad
         FROM @Xml.nodes('/PropiedadCambio/Cambio') AS T(C)
         LEFT JOIN dbo.Propiedad AS P
             ON P.NumFinca = C.value('@numeroFinca','VARCHAR(16)');
 
+        -- Validar que no haya valores <= 0
         IF EXISTS (
             SELECT 1
             FROM @Cambios
@@ -62,6 +65,7 @@ BEGIN
             GOTO FinCambioValor;
         END ;
 
+        -- Validar que todas las fincas existan
         IF EXISTS (
             SELECT 1
             FROM @Cambios
@@ -75,33 +79,16 @@ BEGIN
 
         BEGIN TRAN;
 
-        DECLARE @NumFincaCambio VARCHAR(16);
-        DECLARE @NuevoValorCambio DECIMAL(18,2);
-        DECLARE @IDPropiedadCambio INT;
-
-        DECLARE cambios_cursor CURSOR FOR
-        SELECT NumFinca, NuevoValor, IDPropiedad
-        FROM @Cambios;
-
-        OPEN cambios_cursor;
-        FETCH NEXT FROM cambios_cursor INTO @NumFincaCambio, @NuevoValorCambio, @IDPropiedadCambio;
-
-        WHILE @@FETCH_STATUS = 0
-        BEGIN
-            UPDATE dbo.Propiedad
-            SET ValorPropiedad = @NuevoValorCambio
-            WHERE ID = @IDPropiedadCambio;
-
-            FETCH NEXT FROM cambios_cursor INTO @NumFincaCambio, @NuevoValorCambio, @IDPropiedadCambio;
-        END;
-
-        CLOSE cambios_cursor;
-        DEALLOCATE cambios_cursor;
+        UPDATE P
+        SET P.ValorPropiedad = C.NuevoValor
+        FROM dbo.Propiedad P
+        INNER JOIN @Cambios C ON P.ID = C.IDPropiedad
+        WHERE P.ValorPropiedad <> C.NuevoValor; -- Solo actualizar si el valor realmente cambió
 
         IF @@ROWCOUNT = 0
         BEGIN
             SET @outResultCode = 50012;
-            SET @descripcionEvento = 'Sin cambios: No se actualizó ningún valor de propiedad' ;
+            SET @descripcionEvento = 'Sin cambios: No se actualizó ningún valor de propiedad (los valores ya estaban actualizados)' ;
             ROLLBACK TRAN;
             GOTO FinCambioValor;
         END;

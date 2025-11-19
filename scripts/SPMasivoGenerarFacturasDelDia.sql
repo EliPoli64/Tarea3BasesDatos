@@ -1,8 +1,8 @@
 CREATE OR ALTER PROCEDURE dbo.MasivoGenerarFacturasDelDia
-    @inFechaOperacion DATE,
-    @inUserName VARCHAR(32),
-    @inIP VARCHAR(32),
-    @outResultCode INT OUTPUT
+    @inFechaOperacion   DATE
+    , @inUserName       VARCHAR(32)
+    , @inIP             VARCHAR(32)
+    , @outResultCode    INT OUTPUT
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -69,12 +69,9 @@ BEGIN
         FROM dbo.Propiedad P
         WHERE P.EsActivo = 1
           AND (
-            -- Mismo día del mes
             DAY(P.FechaRegistro) = DAY(@inFechaOperacion)
-            -- Para propiedades registradas el día 31, facturar los días 28, 29, 30
             OR (DAY(P.FechaRegistro) = 31 AND DAY(@inFechaOperacion) IN (28, 29, 30))
           )
-          -- VERIFICACIÓN MEJORADA: No crear factura si ya existe una del mismo día (pendiente o pagada)
           AND NOT EXISTS (
             SELECT 1 
             FROM dbo.Factura F 
@@ -90,7 +87,6 @@ BEGIN
             GOTO FinFacturas;
         END;
 
-        -- Crear las facturas base SOLO para propiedades que no tienen factura del día
         INSERT INTO dbo.Factura (
             FechaFactura, 
             FechaLimitePago, 
@@ -214,7 +210,7 @@ BEGIN
               AND PXC.Activo = 1
         );
 
-        -- 4. Mantenimiento de parques (SOLO para áreas residenciales o comerciales - CC ID 7)
+        -- 4. Mantenimiento de parques
         INSERT INTO @LineasFactura (IDFactura, IDCC, Monto)
         SELECT 
             FRC.IDFactura,
@@ -231,7 +227,7 @@ BEGIN
               AND PXC.Activo = 1
         );
 
-        -- 5. Patente comercial (SI aplica - CC ID 4)
+        -- 5. Patente comercial
         INSERT INTO @LineasFactura (IDFactura, IDCC, Monto)
         SELECT 
             FRC.IDFactura,
@@ -265,7 +261,7 @@ BEGIN
         WHERE F.FechaFactura = @inFechaOperacion
           AND F.EstadoFactura = 0;
 
-        -- Actualizar el saldo de M3 para la próxima facturación SOLO para propiedades con CC de agua
+        -- Actualizar el saldo de M3 para la próxima facturación para propiedades con CC de agua
         UPDATE P
         SET SaldoM3UltimaFactura = P.SaldoM3
         FROM dbo.Propiedad P
@@ -307,25 +303,26 @@ FinFacturas:
 
         SET @outResultCode = 50008;
         
-        INSERT INTO dbo.DBError (
-            UserName,
-            Number,
-            State,
-            Severity,
-            Line,
-            [Procedure],
-            Message,
-            DateTime
-        ) VALUES (
-            SUSER_SNAME(),
-            ERROR_NUMBER(),
-            ERROR_STATE(),
-            ERROR_SEVERITY(),
-            ERROR_LINE(),
-            'MasivoGenerarFacturasDelDia',
-            ERROR_MESSAGE(),
-            GETDATE()
-        );
+        
+		INSERT INTO dbo.DBError (
+			[UserName]
+			, [Number]
+			, [State]
+			, [Severity]
+			, [Line]
+			, [Procedure]
+			, [Message]
+			, [DateTime]
+		) VALUES (
+			SUSER_SNAME()
+			, ERROR_NUMBER()
+			, ERROR_STATE()
+			, ERROR_SEVERITY()
+			, ERROR_LINE()
+			, ERROR_PROCEDURE()
+			, ERROR_MESSAGE()
+			, GETDATE()
+		);
 
         SET @descripcionEvento = 'Error inesperado al generar facturas del día: ' + ERROR_MESSAGE();
         SET @tipoEvento = 11;

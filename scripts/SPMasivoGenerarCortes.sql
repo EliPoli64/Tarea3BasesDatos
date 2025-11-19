@@ -1,8 +1,8 @@
 CREATE OR ALTER PROCEDURE dbo.MasivoGenerarCortes
-    @inFechaOperacion DATE,
-    @inUserName VARCHAR(32),
-    @inIP VARCHAR(32),
-    @outResultCode INT OUTPUT
+    @inFechaOperacion   DATE
+    , @inUserName       VARCHAR(32)
+    , @inIP             VARCHAR(32)
+    , @outResultCode    INT OUTPUT
 AS
 BEGIN
     SET NOCOUNT ON;

@@ -1,8 +1,8 @@
 CREATE OR ALTER PROCEDURE dbo.MasivoGenerarReconexiones
-    @inFechaOperacion DATE,
-    @inUserName VARCHAR(32),
-    @inIP VARCHAR(32),
-    @outResultCode INT OUTPUT
+    @inFechaOperacion   DATE
+    , @inUserName       VARCHAR(32)
+    , @inIP             VARCHAR(32)
+    , @outResultCode    INT OUTPUT
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -50,10 +50,10 @@ BEGIN
         END;
 
         EXEC dbo.InsertarBitacora 
-            @inIP,
-            @inUserName,
-            @descripcionEvento,
-            @tipoEvento;
+            @inIP
+            , @inUserName
+            , @descripcionEvento
+            , @tipoEvento;
 
     END TRY
     BEGIN CATCH
@@ -62,23 +62,23 @@ BEGIN
 
         SET @outResultCode = 50008;
         INSERT INTO dbo.DBError (
-            UserName,
-            Number,
-            State,
-            Severity,
-            Line,
-            [Procedure],
-            Message,
-            DateTime
+            UserName
+            , Number
+            , State
+            , Severity
+            , Line
+            , [Procedure]
+            , Message
+            , DateTime
         ) VALUES (
-            SUSER_SNAME(),
-            ERROR_NUMBER(),
-            ERROR_STATE(),
-            ERROR_SEVERITY(),
-            ERROR_LINE(),
-            ERROR_PROCEDURE(),
-            ERROR_MESSAGE(),
-            GETDATE()
+            SUSER_SNAME()
+            , ERROR_NUMBER()
+            , ERROR_STATE()
+            , ERROR_SEVERITY()
+            , ERROR_LINE()
+            , ERROR_PROCEDURE()
+            , ERROR_MESSAGE()
+            , GETDATE()
         );
 
         EXEC dbo.InsertarBitacora 

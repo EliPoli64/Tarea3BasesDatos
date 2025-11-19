@@ -28,9 +28,39 @@ BEGIN
             GOTO FinPropiedades;
         END;
 
-        BEGIN TRAN;
+        DECLARE @Propiedades TABLE (
+            RowID INT IDENTITY(1,1),
+            NumFinca VARCHAR(16),
+            NumMedidor VARCHAR(32),
+            Area DECIMAL(18,2),
+            ValorFiscal DECIMAL(18,2),
+            TipoUsoID INT,
+            TipoAreaID INT,
+            FechaReg DATE
+        );
 
-        DECLARE @NumFinca VARCHAR(16);
+        INSERT INTO @Propiedades (
+            NumFinca,
+            NumMedidor,
+            Area,
+            ValorFiscal,
+            TipoUsoID,
+            TipoAreaID,
+            FechaReg
+        )
+        SELECT
+            P.value('@numeroFinca', 'VARCHAR(16)'),
+            P.value('@numeroMedidor', 'VARCHAR(32)'),
+            P.value('@metrosCuadrados', 'DECIMAL(18,2)'),
+            P.value('@valorFiscal', 'DECIMAL(18,2)'),
+            P.value('@tipoUsoId', 'INT'),
+            P.value('@tipoZonaId', 'INT'),
+            P.value('@fechaRegistro', 'DATE')
+        FROM @Xml.nodes('/Propiedades/Propiedad') AS T(P);
+
+        DECLARE @CurrentRow INT = 1;
+        DECLARE @TotalRows INT = (SELECT COUNT(*) FROM @Propiedades);
+        DECLARE @CurrentNumFinca VARCHAR(16);
         DECLARE @NumMedidor VARCHAR(32);
         DECLARE @Area DECIMAL(18,2);
         DECLARE @ValorFiscal DECIMAL(18,2);
@@ -38,34 +68,29 @@ BEGIN
         DECLARE @TipoAreaID INT;
         DECLARE @FechaReg DATE;
 
-        DECLARE propiedades_cursor CURSOR FOR
-        SELECT
-            P.value('@numeroFinca', 'VARCHAR(16)') AS NumFinca,
-            P.value('@numeroMedidor', 'VARCHAR(32)') AS NumMedidor,
-            P.value('@metrosCuadrados', 'DECIMAL(18,2)') AS Area,
-            P.value('@valorFiscal', 'DECIMAL(18,2)') AS ValorFiscal,
-            P.value('@tipoUsoId', 'INT') AS TipoUsoID,
-            P.value('@tipoZonaId', 'INT') AS TipoAreaID,
-            P.value('@fechaRegistro', 'DATE') AS FechaReg
-        FROM @Xml.nodes('/Propiedades/Propiedad') AS T(P);
+        BEGIN TRANSACTION;
 
-        OPEN propiedades_cursor;
-        FETCH NEXT FROM propiedades_cursor INTO @NumFinca, @NumMedidor, @Area, @ValorFiscal, @TipoUsoID, @TipoAreaID, @FechaReg;
-
-        WHILE @@FETCH_STATUS = 0
+        WHILE @CurrentRow <= @TotalRows
         BEGIN
-            -- Verificar si ya existe la propiedad
-            IF EXISTS (SELECT 1 FROM dbo.Propiedad WHERE NumFinca = @NumFinca)
+            SELECT 
+                @CurrentNumFinca = NumFinca,
+                @NumMedidor = NumMedidor,
+                @Area = Area,
+                @ValorFiscal = ValorFiscal,
+                @TipoUsoID = TipoUsoID,
+                @TipoAreaID = TipoAreaID,
+                @FechaReg = FechaReg
+            FROM @Propiedades 
+            WHERE RowID = @CurrentRow;
+
+            IF EXISTS (SELECT 1 FROM dbo.Propiedad WHERE NumFinca = @CurrentNumFinca)
             BEGIN
                 SET @outResultCode = 50005;
-                SET @descripcionEvento = 'Error: Ya existe una propiedad con la misma finca: ' + @NumFinca;
-                CLOSE propiedades_cursor;
-                DEALLOCATE propiedades_cursor;
-                ROLLBACK TRAN;
+                SET @descripcionEvento = 'Error: Ya existe una propiedad con la misma finca: ' + @CurrentNumFinca;
+                ROLLBACK TRANSACTION;
                 GOTO FinPropiedades;
             END;
 
-            -- Insertar una propiedad a la vez para activar el trigger
             INSERT INTO dbo.Propiedad(
                 NumFinca,
                 Area,
@@ -79,7 +104,7 @@ BEGIN
                 UltimaLecturaMedidor,
                 EsActivo)
             VALUES(
-                @NumFinca,
+                @CurrentNumFinca,
                 @Area,
                 @ValorFiscal,
                 @FechaReg,
@@ -92,13 +117,10 @@ BEGIN
                 1
             );
 
-            FETCH NEXT FROM propiedades_cursor INTO @NumFinca, @NumMedidor, @Area, @ValorFiscal, @TipoUsoID, @TipoAreaID, @FechaReg;
+            SET @CurrentRow = @CurrentRow + 1;
         END;
 
-        CLOSE propiedades_cursor;
-        DEALLOCATE propiedades_cursor;
-
-        COMMIT TRAN;
+        COMMIT TRANSACTION;
 
 FinPropiedades:
         IF @outResultCode <> 0
@@ -114,10 +136,11 @@ FinPropiedades:
 
     END TRY
     BEGIN CATCH
-        IF XACT_STATE() <> 0
+        IF @@TRANCOUNT > 0
         BEGIN
-            ROLLBACK TRAN;
+            ROLLBACK TRANSACTION;
         END;
+
         SET @outResultCode = 50008;
 		
         INSERT INTO dbo.DBError(
