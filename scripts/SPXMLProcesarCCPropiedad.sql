@@ -9,9 +9,6 @@ BEGIN
     DECLARE @descripcionEvento VARCHAR(256);
     DECLARE @resultBitacora INT;
     DECLARE @tipoEvento INT = 2;
-    DECLARE @BaseID INT;
-    DECLARE @TotalBajas INT;
-    DECLARE @Actualizadas INT;
     SET @outResultCode = 0;
     SET @descripcionEvento = 'Éxito: CCPropiedad procesado correctamente';
 
@@ -19,14 +16,14 @@ BEGIN
         IF @Xml IS NULL
            OR LEN(CAST(@Xml AS NVARCHAR(MAX))) = 0
         BEGIN
-            SET @outResultCode = 50002;  -- Validación fallida
+            SET @outResultCode = 50002;
             SET @descripcionEvento = 'Error: XML de CCPropiedad vacío';
             GOTO FinCCProp;
         END;
 
         IF @Xml.exist('/CCPropiedad/Movimiento') = 0
         BEGIN
-            SET @outResultCode = 50012;  -- Sin cambios
+            SET @outResultCode = 50012;
             SET @descripcionEvento = 'Sin cambios: No hay nodos <Movimiento> en CCPropiedad';
             GOTO FinCCProp;
         END;
@@ -53,19 +50,17 @@ BEGIN
         LEFT JOIN dbo.Propiedad AS P
             ON P.NumFinca = M.value('@numeroFinca', 'VARCHAR(16)');
 
-        -- Propiedad no encontrada
         IF EXISTS (
             SELECT 1
             FROM @Movimientos
             WHERE IDPropiedad IS NULL
         )
         BEGIN
-            SET @outResultCode = 50001;  -- No encontrado
+            SET @outResultCode = 50001;
             SET @descripcionEvento = 'Error: Al menos una propiedad de CCPropiedad no existe';
             GOTO FinCCProp;
         END;
 
-        -- ConceptoCobro no encontrado
         IF EXISTS (
             SELECT 1
             FROM @Movimientos AS M
@@ -73,95 +68,92 @@ BEGIN
             WHERE CC.ID IS NULL
         )
         BEGIN
-            SET @outResultCode = 50001;  -- No encontrado
+            SET @outResultCode = 50001;
             SET @descripcionEvento = 'Error: Al menos un concepto de cobro de CCPropiedad no existe';
             GOTO FinCCProp;
         END;
 
-        IF EXISTS (
-            SELECT 1
-            FROM @Movimientos AS M
-            JOIN dbo.PropiedadXCC AS PX
-                ON PX.IDPropiedad = M.IDPropiedad
-                AND PX.IDCC = M.IDCC
-                AND PX.Activo = 1
-            WHERE M.TipoAso = 1
-        )
-        BEGIN
-            SET @outResultCode = 50004;  -- Estado no válido
-            SET @descripcionEvento = 'Error: Uno o más conceptos ya estaban activos en la propiedad (CCPropiedad)';
-            GOTO FinCCProp;
-        END;
-
-        IF EXISTS (
-            SELECT 1
-            FROM @Movimientos AS M
-            LEFT JOIN dbo.PropiedadXCC AS PX
-                ON PX.IDPropiedad = M.IDPropiedad
-                AND PX.IDCC = M.IDCC
-                AND PX.Activo = 1
-            WHERE M.TipoAso = 2
-              AND PX.ID IS NULL
-        )
-        BEGIN
-            SET @outResultCode = 50004;  -- Estado no válido
-            SET @descripcionEvento = 'Error: Uno o más conceptos no estaban activos en la propiedad al desasociar (CCPropiedad)';
-            GOTO FinCCProp;
-        END;
-
         BEGIN TRAN;
-        SELECT @BaseID = ISNULL(MAX(ID), 0)
-        FROM dbo.PropiedadXCC;
 
-        ;WITH Altas AS (
-            SELECT
-                ROW_NUMBER() OVER (ORDER BY (SELECT 1)) AS RowNum,
-                M.IDPropiedad,
-                M.IDCC
-            FROM @Movimientos AS M
-            WHERE M.TipoAso = 1
-        )
-		
-        INSERT INTO dbo.PropiedadXCC(
-            ID,
-            IDPropiedad,
-            IDCC,
-            FechaAsociacion,
-            Activo
-        )
-        SELECT
-            @BaseID + A.RowNum,
-            A.IDPropiedad,
-            A.IDCC,
-            GETDATE(),
-            1
-        FROM Altas AS A;
+        DECLARE @NumFincaAltas VARCHAR(16);
+        DECLARE @IDCCAltas INT;
+        DECLARE @IDPropiedadAltas INT;
+        DECLARE @TipoAsoAltas INT;
 
-        SELECT @TotalBajas = COUNT(*)
-        FROM @Movimientos
-        WHERE TipoAso = 2;
+        DECLARE movimientos_cursor CURSOR FOR
+        SELECT NumFinca, IDCC, TipoAso, IDPropiedad
+        FROM @Movimientos;
 
-        IF @TotalBajas > 0
+        OPEN movimientos_cursor;
+        FETCH NEXT FROM movimientos_cursor INTO @NumFincaAltas, @IDCCAltas, @TipoAsoAltas, @IDPropiedadAltas;
+
+        WHILE @@FETCH_STATUS = 0
         BEGIN
-            UPDATE PX
-            SET  PX.Activo = 0
-            FROM dbo.PropiedadXCC AS PX
-            JOIN @Movimientos AS M
-                ON  PX.IDPropiedad = M.IDPropiedad
-                AND PX.IDCC = M.IDCC
-            WHERE M.TipoAso = 2
-              AND PX.Activo = 1;
-
-            SET @Actualizadas = @@ROWCOUNT;
-
-            IF @Actualizadas < @TotalBajas
+            IF @TipoAsoAltas = 1
             BEGIN
-                SET @outResultCode = 50004;  -- Estado no válido
-                SET @descripcionEvento = 'Error: Uno o más conceptos no estaban activos en la propiedad al desasociar (CCPropiedad)';
-                ROLLBACK TRAN;
-                GOTO FinCCProp;
-            END;
+                -- Verificar si ya existe la asociación activa
+                IF EXISTS (
+                    SELECT 1
+                    FROM dbo.PropiedadXCC
+                    WHERE IDPropiedad = @IDPropiedadAltas
+                      AND IDCC = @IDCCAltas
+                      AND Activo = 1
+                )
+                BEGIN
+                    SET @outResultCode = 50004;
+                    SET @descripcionEvento = 'Error: El concepto de cobro ya está activo para esta propiedad';
+                    CLOSE movimientos_cursor;
+                    DEALLOCATE movimientos_cursor;
+                    ROLLBACK TRAN;
+                    GOTO FinCCProp;
+                END;
+
+                -- Insertar una asociación a la vez
+                INSERT INTO dbo.PropiedadXCC(
+                    IDPropiedad,
+                    IDCC,
+                    FechaAsociacion,
+                    Activo
+                )
+                VALUES(
+                    @IDPropiedadAltas,
+                    @IDCCAltas,
+                    GETDATE(),
+                    1
+                );
+            END
+            ELSE IF @TipoAsoAltas = 2
+            BEGIN
+                -- Verificar si existe la asociación activa
+                IF NOT EXISTS (
+                    SELECT 1
+                    FROM dbo.PropiedadXCC
+                    WHERE IDPropiedad = @IDPropiedadAltas
+                      AND IDCC = @IDCCAltas
+                      AND Activo = 1
+                )
+                BEGIN
+                    SET @outResultCode = 50004;
+                    SET @descripcionEvento = 'Error: El concepto de cobro no está activo para esta propiedad';
+                    CLOSE movimientos_cursor;
+                    DEALLOCATE movimientos_cursor;
+                    ROLLBACK TRAN;
+                    GOTO FinCCProp;
+                END;
+
+                -- Actualizar una asociación a la vez
+                UPDATE dbo.PropiedadXCC
+                SET Activo = 0
+                WHERE IDPropiedad = @IDPropiedadAltas
+                  AND IDCC = @IDCCAltas
+                  AND Activo = 1;
+            END
+
+            FETCH NEXT FROM movimientos_cursor INTO @NumFincaAltas, @IDCCAltas, @TipoAsoAltas, @IDPropiedadAltas;
         END;
+
+        CLOSE movimientos_cursor;
+        DEALLOCATE movimientos_cursor;
 
         COMMIT TRAN;
 
@@ -184,25 +176,28 @@ FinCCProp:
             ROLLBACK TRAN;
         END;
 
-        SET @outResultCode = 50008;  -- ErrorBD
-        DECLARE @ErrorNumber INT = ERROR_NUMBER();
-		DECLARE @ErrorState INT = ERROR_STATE();
-		DECLARE @ErrorSeverity INT = ERROR_SEVERITY();
-		DECLARE @ErrorLine INT = ERROR_LINE();
-		DECLARE @ErrorProcedure VARCHAR(32) = ERROR_PROCEDURE();
-		DECLARE @ErrorMessage VARCHAR(512) = ERROR_MESSAGE();
-		DECLARE @UserName VARCHAR(32) = SUSER_SNAME();
-		DECLARE @CurrentDate DATETIME = GETDATE();
+        SET @outResultCode = 50008;
 
-		EXEC dbo.InsertarError
-			@inSUSER_SNAME      = @UserName,
-			@inERROR_NUMBER     = @ErrorNumber,
-			@inERROR_STATE      = @ErrorState,
-			@inERROR_SEVERITY   = @ErrorSeverity,
-			@inERROR_LINE       = @ErrorLine,
-			@inERROR_PROCEDURE  = @ErrorProcedure,
-			@inERROR_MESSAGE    = @ErrorMessage,
-			@inGETDATE          = @CurrentDate;
+        INSERT INTO dbo.DBError(
+            [UserName],
+            [Number],
+            [State],
+            [Severity],
+            [Line],
+            [Procedure],
+            [Message],
+            [DateTime]
+        )
+        VALUES(
+            SUSER_SNAME(),
+            ERROR_NUMBER(),
+            ERROR_STATE(),
+            ERROR_SEVERITY(),
+            ERROR_LINE(),
+            ERROR_PROCEDURE(),
+            ERROR_MESSAGE(),
+            GETDATE()
+        );
     END CATCH;
 
     SET NOCOUNT OFF;

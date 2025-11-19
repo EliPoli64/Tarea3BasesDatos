@@ -21,21 +21,21 @@ BEGIN
 		IF @Xml IS NULL
 		   OR LEN(CAST(@Xml AS NVARCHAR(MAX))) = 0
 		BEGIN
-			SET @outResultCode     = 50002 ; -- Validación fallida
+			SET @outResultCode     = 50002 ;
 			SET @descripcionEvento = 'Error: XML de PropiedadPersona vacío' ;
 			GOTO FinPropiedadPersona ;
 		END ;
 
-		IF @Xml.exist('/PropiedadPersona/PropiedadPersona') = 0
+		IF @Xml.exist('/PropiedadPersona/Movimiento') = 0
 		BEGIN
-			SET @outResultCode     = 50012 ; -- Sin cambios
+			SET @outResultCode     = 50012 ;
 			SET @descripcionEvento = 'Sin cambios: No hay nodos <PropiedadPersona> en el XML' ;
 			GOTO FinPropiedadPersona ;
 		END ;
 
 		IF @FechaOperacion IS NULL
 		BEGIN
-			SET @outResultCode     = 50002 ; -- Validación fallida
+			SET @outResultCode     = 50002 ;
 			SET @descripcionEvento = 'Error: Fecha de operación no proporcionada en PropiedadPersona' ;
 			GOTO FinPropiedadPersona ;
 		END ;
@@ -68,38 +68,35 @@ BEGIN
 					P.value('@valorDocumento' , 'VARCHAR(32)') AS ValorDoc ,
 					P.value('@numeroFinca' , 'VARCHAR(16)') AS NumFinca ,
 					P.value('@tipoAsociacionId' , 'INT') AS TipoAsociacionId
-				FROM @Xml.nodes('/PropiedadPersona/PropiedadPersona') AS T(P)
+				FROM @Xml.nodes('/PropiedadPersona/Movimiento') AS T(P)
 		     ) AS X
 		LEFT JOIN dbo.Propietario AS PR
 			ON PR.ValorDocumentoId = X.ValorDoc
 		LEFT JOIN dbo.Propiedad  AS PP
 			ON PP.NumFinca = X.NumFinca ;
 
-		-- Propietario no encontrado
 		IF EXISTS (
 			SELECT 1
 			FROM @PropiedadPersonaConIds
 			WHERE IDPropietario IS NULL
 		)
 		BEGIN
-			SET @outResultCode = 50001 ; -- No encontrado
+			SET @outResultCode = 50001 ;
 			SET @descripcionEvento = 'Error: Al menos un propietario de PropiedadPersona no existe' ;
 			GOTO FinPropiedadPersona ;
 		END ;
 
-		-- Propiedad no encontrada
 		IF EXISTS (
 			SELECT 1
 			FROM @PropiedadPersonaConIds
 			WHERE IDPropiedad IS NULL
 		)
 		BEGIN
-			SET @outResultCode = 50001 ; -- No encontrado
+			SET @outResultCode = 50001 ;
 			SET @descripcionEvento = 'Error: Al menos una propiedad de PropiedadPersona no existe' ;
 			GOTO FinPropiedadPersona ;
 		END ;
 
-		-- Alta cuando ya hay asociación activa
 		IF EXISTS (
 			SELECT 1
 			FROM @PropiedadPersonaConIds AS X
@@ -110,55 +107,94 @@ BEGIN
 			WHERE X.TipoAsociacionId = 1
 		)
 		BEGIN
-			SET @outResultCode = 50004 ; -- Estado no válido
+			SET @outResultCode = 50004 ;
 			SET @descripcionEvento = 'Error: Existe al menos una asociación Propiedad-Persona ya activa' ;
 			GOTO FinPropiedadPersona ;
 		END ;
 
 		BEGIN TRAN ;
-		-- Altas
-		INSERT INTO dbo.AsociacionPxP
-		(
-			FechaInicio ,
-			FechaFin ,
-			IDPropiedad ,
-			IDPropietario ,
-			IDTipoAsociacion
-		)
-		SELECT
-			@FechaOperacion ,
-			'9999-12-31' ,
-			X.IDPropiedad ,
-			X.IDPropietario ,
-			1
-		FROM @PropiedadPersonaConIds AS X
-		WHERE X.TipoAsociacionId = 1 ;
 
-		-- Bajas
+		DECLARE @ValorDocMov VARCHAR(32);
+		DECLARE @NumFincaMov VARCHAR(16);
+		DECLARE @TipoAsociacionIdMov INT;
+		DECLARE @IDPropietarioMov INT;
+		DECLARE @IDPropiedadMov INT;
+
+		DECLARE movimientos_cursor CURSOR FOR
+		SELECT ValorDoc, NumFinca, TipoAsociacionId, IDPropietario, IDPropiedad
+		FROM @PropiedadPersonaConIds
+		WHERE TipoAsociacionId = 1;
+
+		OPEN movimientos_cursor;
+		FETCH NEXT FROM movimientos_cursor INTO @ValorDocMov, @NumFincaMov, @TipoAsociacionIdMov, @IDPropietarioMov, @IDPropiedadMov;
+
+		WHILE @@FETCH_STATUS = 0
+		BEGIN
+			INSERT INTO dbo.AsociacionPxP
+			(
+				FechaInicio ,
+				FechaFin ,
+				IDPropiedad ,
+				IDPropietario ,
+				IDTipoAsociacion
+			)
+			VALUES(
+				@FechaOperacion ,
+				'9999-12-31' ,
+				@IDPropiedadMov ,
+				@IDPropietarioMov ,
+				1
+			);
+
+			FETCH NEXT FROM movimientos_cursor INTO @ValorDocMov, @NumFincaMov, @TipoAsociacionIdMov, @IDPropietarioMov, @IDPropiedadMov;
+		END;
+
+		CLOSE movimientos_cursor;
+		DEALLOCATE movimientos_cursor;
+
 		SELECT @TotalBajas = COUNT(*)
 		FROM @PropiedadPersonaConIds
 		WHERE TipoAsociacionId = 2 ;
 
 		IF @TotalBajas > 0
 		BEGIN
-			UPDATE A
-			SET FechaFin = @FechaOperacion
-			FROM dbo.AsociacionPxP AS A
-			JOIN @PropiedadPersonaConIds AS X
-				ON X.IDPropietario = A.IDPropietario
-			   AND X.IDPropiedad  = A.IDPropiedad
-			WHERE X.TipoAsociacionId = 2
-			  AND A.FechaFin = '9999-12-31' ;
+			DECLARE @ValorDocBaja VARCHAR(32);
+			DECLARE @NumFincaBaja VARCHAR(16);
+			DECLARE @TipoAsociacionIdBaja INT;
+			DECLARE @IDPropietarioBaja INT;
+			DECLARE @IDPropiedadBaja INT;
 
-			SET @Actualizadas = @@ROWCOUNT ;
+			DECLARE bajas_cursor CURSOR FOR
+			SELECT ValorDoc, NumFinca, TipoAsociacionId, IDPropietario, IDPropiedad
+			FROM @PropiedadPersonaConIds
+			WHERE TipoAsociacionId = 2;
 
-			IF @Actualizadas < @TotalBajas
+			OPEN bajas_cursor;
+			FETCH NEXT FROM bajas_cursor INTO @ValorDocBaja, @NumFincaBaja, @TipoAsociacionIdBaja, @IDPropietarioBaja, @IDPropiedadBaja;
+
+			WHILE @@FETCH_STATUS = 0
 			BEGIN
-				SET @outResultCode     = 50004 ; -- Estado no válido
-				SET @descripcionEvento = 'Error: Una o más asociaciones a desasociar no tienen estado activo' ;
-				ROLLBACK TRAN ;
-				GOTO FinPropiedadPersona ;
-			END ;
+				UPDATE dbo.AsociacionPxP
+				SET FechaFin = @FechaOperacion
+				WHERE IDPropietario = @IDPropietarioBaja
+				  AND IDPropiedad = @IDPropiedadBaja
+				  AND FechaFin = '9999-12-31';
+
+				IF @@ROWCOUNT = 0
+				BEGIN
+					SET @outResultCode = 50004;
+					SET @descripcionEvento = 'Error: Una o más asociaciones a desasociar no tienen estado activo';
+					CLOSE bajas_cursor;
+					DEALLOCATE bajas_cursor;
+					ROLLBACK TRAN;
+					GOTO FinPropiedadPersona;
+				END;
+
+				FETCH NEXT FROM bajas_cursor INTO @ValorDocBaja, @NumFincaBaja, @TipoAsociacionIdBaja, @IDPropietarioBaja, @IDPropiedadBaja;
+			END;
+
+			CLOSE bajas_cursor;
+			DEALLOCATE bajas_cursor;
 		END ;
 
 		COMMIT TRAN ;
@@ -181,26 +217,30 @@ FinPropiedadPersona:
 			ROLLBACK TRAN ;
 		END ;
 
-		SET @outResultCode = 50008 ;  -- ErrorBD
+		SET @outResultCode = 50008 ;
 
-		DECLARE @ErrorNumber INT = ERROR_NUMBER();
-		DECLARE @ErrorState INT = ERROR_STATE();
-		DECLARE @ErrorSeverity INT = ERROR_SEVERITY();
-		DECLARE @ErrorLine INT = ERROR_LINE();
-		DECLARE @ErrorProcedure VARCHAR(32) = ERROR_PROCEDURE();
-		DECLARE @ErrorMessage VARCHAR(512) = ERROR_MESSAGE();
-		DECLARE @UserName VARCHAR(32) = SUSER_SNAME();
-		DECLARE @CurrentDate DATETIME = GETDATE();
-
-		EXEC dbo.InsertarError
-			@inSUSER_SNAME      = @UserName,
-			@inERROR_NUMBER     = @ErrorNumber,
-			@inERROR_STATE      = @ErrorState,
-			@inERROR_SEVERITY   = @ErrorSeverity,
-			@inERROR_LINE       = @ErrorLine,
-			@inERROR_PROCEDURE  = @ErrorProcedure,
-			@inERROR_MESSAGE    = @ErrorMessage,
-			@inGETDATE          = @CurrentDate;
+		INSERT INTO dbo.DBError
+		(
+			[UserName] ,
+			[Number] ,
+			[State] ,
+			[Severity] ,
+			[Line] ,
+			[Procedure] ,
+			[Message] ,
+			[DateTime]
+		)
+		VALUES
+		(
+			SUSER_SNAME() ,
+			ERROR_NUMBER() ,
+			ERROR_STATE() ,
+			ERROR_SEVERITY() ,
+			ERROR_LINE() ,
+			ERROR_PROCEDURE() ,
+			ERROR_MESSAGE() ,
+			GETDATE()
+		) ;
 	END CATCH ;
 
 	SET NOCOUNT OFF ;

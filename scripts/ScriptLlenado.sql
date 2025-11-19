@@ -178,7 +178,7 @@ AND CC.value('@ValorPorcentual', 'VARCHAR(32)') != '';
 DECLARE @OperacionesXml XML;
 
 SELECT @OperacionesXml = BulkColumn
-FROM OPENROWSET(BULK 'C:\Users\Elias\projs\Tarea3BasesDatos\XMLs\operaciones_limpio.xml', SINGLE_BLOB) AS x;
+FROM OPENROWSET(BULK 'C:\Users\Elias\projs\Tarea3BasesDatos\XMLs\xmlUltimo.xml', SINGLE_BLOB) AS x;
 
 DECLARE @inUserName VARCHAR(32) = 'admin';
 DECLARE @inIP VARCHAR(32) = '127.0.0.1';
@@ -263,7 +263,7 @@ BEGIN
 			, @inUserName = @inUserName
 			, @inIP = @inIP
 			, @outResultCode = @outResultCode OUTPUT;
-		IF (@outResultCode != 0)
+		IF (@outResultCode != 0 AND @outResultCode != 50012)
 		BEGIN
             SELECT @outResultCode, 'PropPersona';
 			RETURN;

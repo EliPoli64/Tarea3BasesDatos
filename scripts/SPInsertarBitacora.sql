@@ -12,6 +12,10 @@ BEGIN
 		SELECT @userID = U.ID
 			FROM dbo.Usuario U
 			WHERE U.UserName = @inUsuario;
+		IF (@userID = NULL)
+		BEGIN
+			SET @userID = 1;
+		END
 
 		INSERT INTO dbo.Bitacora (	
 			PostInIP
@@ -30,24 +34,25 @@ BEGIN
 	END TRY
 	BEGIN CATCH
 
-		DECLARE @ErrorNumber INT = ERROR_NUMBER();
-		DECLARE @ErrorState INT = ERROR_STATE();
-		DECLARE @ErrorSeverity INT = ERROR_SEVERITY();
-		DECLARE @ErrorLine INT = ERROR_LINE();
-		DECLARE @ErrorProcedure VARCHAR(32) = ERROR_PROCEDURE();
-		DECLARE @ErrorMessage VARCHAR(512) = ERROR_MESSAGE();
-		DECLARE @UserName VARCHAR(32) = SUSER_SNAME();
-		DECLARE @CurrentDate DATETIME = GETDATE();
-
-		EXEC dbo.InsertarError
-			@inSUSER_SNAME      = @UserName,
-			@inERROR_NUMBER     = @ErrorNumber,
-			@inERROR_STATE      = @ErrorState,
-			@inERROR_SEVERITY   = @ErrorSeverity,
-			@inERROR_LINE       = @ErrorLine,
-			@inERROR_PROCEDURE  = @ErrorProcedure,
-			@inERROR_MESSAGE    = @ErrorMessage,
-			@inGETDATE          = @CurrentDate;
+		INSERT INTO dbo.DBError (
+			[UserName]
+			, [Number]
+			, [State]
+			, [Severity]
+			, [Line]
+			, [Procedure]
+			, [Message]
+			, [DateTime]
+		) VALUES (
+			SUSER_SNAME()
+			, ERROR_NUMBER()
+			, ERROR_STATE()
+			, ERROR_SEVERITY()
+			, ERROR_LINE()
+			, ERROR_PROCEDURE()
+			, ERROR_MESSAGE()
+			, GETDATE()
+		);
 	
 	END CATCH
 	SET NOCOUNT OFF;

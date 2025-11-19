@@ -9,7 +9,6 @@ BEGIN
     DECLARE @descripcionEvento  VARCHAR(256);
     DECLARE @resultBitacora     INT;
     DECLARE @tipoEvento         INT = 2;
-    DECLARE @BaseID             INT;
     SET @outResultCode          = 0;
     SET @descripcionEvento      = 'Éxito: Personas procesadas correctamente';
 
@@ -29,54 +28,67 @@ BEGIN
             GOTO FinPersonas;
         END;
 
-        IF EXISTS (
-            SELECT 1
-            FROM @Xml.nodes('/Personas/Persona') AS T(P)
-            JOIN dbo.Propietario AS PR ON PR.ValorDocumentoId = P.value('@valorDocumento', 'VARCHAR(32)'))	
-        BEGIN
-            SET @outResultCode = 50005; -- ID duplicada
-            SET @descripcionEvento = 'Error: Ya existe al menos un propietario con el mismo documento';
-            GOTO FinPersonas;
-        END;
-		
         BEGIN TRAN;
-        SELECT  @BaseID = ISNULL(MAX(ID), 0)
-        FROM    dbo.Propietario;
-        ;WITH PersonasXml AS (
-            SELECT
-                ROW_NUMBER() OVER (ORDER BY (SELECT 1)) AS RowNum,
-                P.value('@valorDocumento', 'VARCHAR(32)') AS ValorDocumento,
-                P.value('@nombre', 'VARCHAR(64)') AS Nombre,
-                P.value('@telefono', 'VARCHAR(16)') AS Telefono
-            FROM @Xml.nodes('/Personas/Persona') AS T(P)
-        )
-		
-        INSERT INTO dbo.Propietario (
-            ID
-            , Nombre
-            , ValorDocumentoId
-            , Telefono
-            , EsActivo)
+
+        DECLARE @ValorDocumento VARCHAR(32);
+        DECLARE @Nombre VARCHAR(64);
+        DECLARE @Telefono VARCHAR(16);
+
+        DECLARE personas_cursor CURSOR FOR
         SELECT
-            @BaseID + PX.RowNum
-            , PX.Nombre
-            , PX.ValorDocumento
-            , PX.Telefono
-            , 1
-        FROM PersonasXml AS PX;
+            P.value('@valorDocumento', 'VARCHAR(32)') AS ValorDocumento,
+            P.value('@nombre', 'VARCHAR(64)') AS Nombre,
+            P.value('@telefono', 'VARCHAR(16)') AS Telefono
+        FROM @Xml.nodes('/Personas/Persona') AS T(P);
+
+        OPEN personas_cursor;
+        FETCH NEXT FROM personas_cursor INTO @ValorDocumento, @Nombre, @Telefono;
+
+        WHILE @@FETCH_STATUS = 0
+        BEGIN
+            -- Verificar si ya existe el propietario
+            IF EXISTS (SELECT 1 FROM dbo.Propietario WHERE ValorDocumentoId = @ValorDocumento)
+            BEGIN
+                SET @outResultCode = 50005;
+                SET @descripcionEvento = 'Error: Ya existe un propietario con el mismo documento: ' + @ValorDocumento;
+                CLOSE personas_cursor;
+                DEALLOCATE personas_cursor;
+                ROLLBACK TRAN;
+                GOTO FinPersonas;
+            END;
+
+            -- Insertar un propietario a la vez para activar el trigger
+            INSERT INTO dbo.Propietario (
+                Nombre,
+                ValorDocumentoId,
+                Telefono,
+                EsActivo)
+            VALUES(
+                @Nombre,
+                @ValorDocumento,
+                @Telefono,
+                1
+            );
+
+            FETCH NEXT FROM personas_cursor INTO @ValorDocumento, @Nombre, @Telefono;
+        END;
+
+        CLOSE personas_cursor;
+        DEALLOCATE personas_cursor;
+
         COMMIT TRAN;
 
 FinPersonas:
         IF @outResultCode <> 0
         BEGIN
-            SET @tipoEvento = 11;  -- error
+            SET @tipoEvento = 11;
         END;
 
         EXEC dbo.InsertarBitacora
-            @inIP
-            , @inUserName
-            , @descripcionEvento
-            , @tipoEvento;
+            @inIP,
+            @inUserName,
+            @descripcionEvento,
+            @tipoEvento;
     END TRY
     BEGIN CATCH
 
@@ -84,26 +96,26 @@ FinPersonas:
         BEGIN
             ROLLBACK TRAN;
         END;
-        SET @outResultCode = 50008;  -- ErrorBD
+        SET @outResultCode = 50008;
 
-        DECLARE @ErrorNumber INT = ERROR_NUMBER();
-		DECLARE @ErrorState INT = ERROR_STATE();
-		DECLARE @ErrorSeverity INT = ERROR_SEVERITY();
-		DECLARE @ErrorLine INT = ERROR_LINE();
-		DECLARE @ErrorProcedure VARCHAR(32) = ERROR_PROCEDURE();
-		DECLARE @ErrorMessage VARCHAR(512) = ERROR_MESSAGE();
-		DECLARE @UserName VARCHAR(32) = SUSER_SNAME();
-		DECLARE @CurrentDate DATETIME = GETDATE();
-
-		EXEC dbo.InsertarError
-			@inSUSER_SNAME      = @UserName,
-			@inERROR_NUMBER     = @ErrorNumber,
-			@inERROR_STATE      = @ErrorState,
-			@inERROR_SEVERITY   = @ErrorSeverity,
-			@inERROR_LINE       = @ErrorLine,
-			@inERROR_PROCEDURE  = @ErrorProcedure,
-			@inERROR_MESSAGE    = @ErrorMessage,
-			@inGETDATE          = @CurrentDate;
+        INSERT INTO dbo.DBError(
+            [UserName],
+            [Number],
+            [State],
+            [Severity],
+            [Line],
+            [Procedure],
+            [Message],
+            [DateTime])
+        VALUES(
+			SUSER_SNAME(),
+            ERROR_NUMBER(),
+            ERROR_STATE(),
+            ERROR_SEVERITY(),
+            ERROR_LINE(),
+            ERROR_PROCEDURE(),
+            ERROR_MESSAGE(),
+            GETDATE());
     END CATCH;
 
     SET NOCOUNT OFF;

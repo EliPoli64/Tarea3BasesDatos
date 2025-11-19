@@ -17,21 +17,21 @@ BEGIN
         IF @Xml IS NULL
            OR LEN(CAST(@Xml AS NVARCHAR(MAX))) = 0
         BEGIN
-            SET @outResultCode = 50002;  -- Validación fallida
+            SET @outResultCode = 50002;
             SET @descripcionEvento = 'Error: XML de Pagos vacío';
             GOTO FinPagos;
         END;
 
         IF @FechaOperacion IS NULL
         BEGIN
-            SET @outResultCode = 50002;  -- Validación fallida
+            SET @outResultCode = 50002;
             SET @descripcionEvento = 'Error: Fecha de operación no proporcionada para Pagos';
             GOTO FinPagos;
         END;
 
         IF @Xml.exist('/Pagos/Pago') = 0
         BEGIN
-            SET @outResultCode = 50012;  -- Sin cambios
+            SET @outResultCode = 50012;
             SET @descripcionEvento = 'Sin cambios: No hay nodos <Pago> en Pagos';
             GOTO FinPagos;
         END;
@@ -95,27 +95,14 @@ BEGIN
             AND OC.Estado = 0
         ) AS OC;
 		
-        -- Propiedad no encontrada para algún pago
         IF EXISTS (
             SELECT 1
             FROM @Pagos
             WHERE IDPropiedad IS NULL
         )
         BEGIN
-            SET @outResultCode = 50001;  -- No encontrado
+            SET @outResultCode = 50001;
             SET @descripcionEvento = 'Error: Al menos una propiedad del XML de Pagos no existe';
-            GOTO FinPagos;
-        END;
-
-        -- Sin factura pendiente para alguna propiedad
-        IF EXISTS (
-            SELECT 1
-            FROM @Pagos
-            WHERE IDFactura IS NULL
-        )
-        BEGIN
-            SET @outResultCode = 50009;  -- No hay facturas pendientes
-            SET @descripcionEvento = 'Error: Al menos una propiedad de Pagos no tiene factura pendiente';
             GOTO FinPagos;
         END;
 
@@ -131,70 +118,89 @@ BEGIN
         FROM @Pagos AS P;
 
         BEGIN TRAN;
-        UPDATE F
-        SET F.EstadoFactura = 1,
-            F.IDTipoMedioPago = P.TipoMedioPagoId,
-            F.TotalPagarFinal = P.TotalOriginal + P.MontoIntereses
-        FROM dbo.Factura AS F
-        JOIN @Pagos AS P ON P.IDFactura = F.ID;
 
-        INSERT INTO dbo.Linea(
-            Monto,
-            IDFactura,
-            IDCC
-        )
-        SELECT
-            P.MontoIntereses,
-            P.IDFactura,
-            7              -- Suponiendo Intereses moratorios
-        FROM @Pagos AS P
-        WHERE P.MontoIntereses > 0;
+        DECLARE @NumFincaPago VARCHAR(16);
+        DECLARE @TipoMedioPagoIdPago INT;
+        DECLARE @NumeroRefPago VARCHAR(32);
+        DECLARE @IDPropiedadPago INT;
+        DECLARE @IDFacturaPago INT;
+        DECLARE @FechaLimitePago DATE;
+        DECLARE @TotalOriginalPago MONEY;
+        DECLARE @OrdenCorteIDPago INT;
+        DECLARE @MontoInteresesPago MONEY;
 
-        DECLARE @CortesQueProceden TABLE
-        (
-            OrdenCorteID INT PRIMARY KEY
-        ) ;
+        DECLARE pagos_cursor CURSOR FOR
+        SELECT NumFinca, TipoMedioPagoId, NumeroRef, IDPropiedad, IDFactura, FechaLimite, TotalOriginal, OrdenCorteID, MontoIntereses
+        FROM @Pagos;
 
-        INSERT INTO @CortesQueProceden (OrdenCorteID)
-        SELECT DISTINCT
-               P.OrdenCorteID
-        FROM @Pagos AS P
-        WHERE P.OrdenCorteID IS NOT NULL
-          AND NOT EXISTS (
-                SELECT 1
-                FROM dbo.Factura AS F2
-                WHERE F2.IDPropiedad   = P.IDPropiedad
-                  AND F2.EstadoFactura = 0
-                  AND F2.FechaLimitePago < @FechaOperacion
-          ) ;
+        OPEN pagos_cursor;
+        FETCH NEXT FROM pagos_cursor INTO @NumFincaPago, @TipoMedioPagoIdPago, @NumeroRefPago, @IDPropiedadPago, @IDFacturaPago, @FechaLimitePago, @TotalOriginalPago, @OrdenCorteIDPago, @MontoInteresesPago;
 
-        INSERT INTO dbo.OrdenReconexion(
-            ID,
-            Fecha,
-            IDOrdenCorte
-        )
-        SELECT
-            C.OrdenCorteID,
-            @FechaOperacion,
-            C.OrdenCorteID
-        FROM @CortesQueProceden AS C;
+        WHILE @@FETCH_STATUS = 0
+        BEGIN
+            UPDATE dbo.Factura
+            SET EstadoFactura = 1,
+                IDTipoMedioPago = @TipoMedioPagoIdPago,
+                TotalPagarFinal = @TotalOriginalPago + @MontoInteresesPago
+            WHERE ID = @IDFacturaPago;
 
-        UPDATE OC
-        SET OC.Estado = 1
-        FROM dbo.OrdenCorte AS OC
-        JOIN @CortesQueProceden AS C
-            ON OC.ID = C.OrdenCorteID;
+            IF @MontoInteresesPago > 0
+            BEGIN
+                INSERT INTO dbo.Linea(
+                    Monto,
+                    IDFactura,
+                    IDCC
+                )
+                VALUES(
+                    @MontoInteresesPago,
+                    @IDFacturaPago,
+                    7
+                );
+            END;
 
-        INSERT INTO dbo.ComprobantePago(
-            Fecha,
-            Codigo,
-            IDPropiedad
-        )
-        SELECT
-            @FechaOperacion,
-            P.NumeroRef,
-            P.IDPropiedad
-        FROM @Pagos AS P;
+            IF @OrdenCorteIDPago IS NOT NULL
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1
+                    FROM dbo.Factura AS F2
+                    WHERE F2.IDPropiedad = @IDPropiedadPago
+                      AND F2.EstadoFactura = 0
+                      AND F2.FechaLimitePago < @FechaOperacion
+                )
+                BEGIN
+                    INSERT INTO dbo.OrdenReconexion(
+                        ID,
+                        Fecha,
+                        IDOrdenCorte
+                    )
+                    VALUES(
+                        @OrdenCorteIDPago,
+                        @FechaOperacion,
+                        @OrdenCorteIDPago
+                    );
+
+                    UPDATE dbo.OrdenCorte
+                    SET Estado = 1
+                    WHERE ID = @OrdenCorteIDPago;
+                END;
+            END;
+
+            INSERT INTO dbo.ComprobantePago(
+                Fecha,
+                Codigo,
+                IDPropiedad
+            )
+            VALUES(
+                @FechaOperacion,
+                @NumeroRefPago,
+                @IDPropiedadPago
+            );
+
+            FETCH NEXT FROM pagos_cursor INTO @NumFincaPago, @TipoMedioPagoIdPago, @NumeroRefPago, @IDPropiedadPago, @IDFacturaPago, @FechaLimitePago, @TotalOriginalPago, @OrdenCorteIDPago, @MontoInteresesPago;
+        END;
+
+        CLOSE pagos_cursor;
+        DEALLOCATE pagos_cursor;
 
         COMMIT TRAN;
 
@@ -217,26 +223,28 @@ FinPagos:
             ROLLBACK TRAN;
         END;
 
-        SET @outResultCode = 50008;  -- ErrorBD
+        SET @outResultCode = 50008;
 
-        DECLARE @ErrorNumber INT = ERROR_NUMBER();
-		DECLARE @ErrorState INT = ERROR_STATE();
-		DECLARE @ErrorSeverity INT = ERROR_SEVERITY();
-		DECLARE @ErrorLine INT = ERROR_LINE();
-		DECLARE @ErrorProcedure VARCHAR(32) = ERROR_PROCEDURE();
-		DECLARE @ErrorMessage VARCHAR(512) = ERROR_MESSAGE();
-		DECLARE @UserName VARCHAR(32) = SUSER_SNAME();
-		DECLARE @CurrentDate DATETIME = GETDATE();
-
-		EXEC dbo.InsertarError
-			@inSUSER_SNAME      = @UserName,
-			@inERROR_NUMBER     = @ErrorNumber,
-			@inERROR_STATE      = @ErrorState,
-			@inERROR_SEVERITY   = @ErrorSeverity,
-			@inERROR_LINE       = @ErrorLine,
-			@inERROR_PROCEDURE  = @ErrorProcedure,
-			@inERROR_MESSAGE    = @ErrorMessage,
-			@inGETDATE          = @CurrentDate;
+        INSERT INTO dbo.DBError(
+            [UserName],
+            [Number],
+            [State],
+            [Severity],
+            [Line],
+            [Procedure],
+            [Message],
+            [DateTime]
+        )
+        VALUES(
+            SUSER_SNAME(),
+            ERROR_NUMBER(),
+            ERROR_STATE(),
+            ERROR_SEVERITY(),
+            ERROR_LINE(),
+            ERROR_PROCEDURE(),
+            ERROR_MESSAGE(),
+            GETDATE()
+        );
     END CATCH;
 
     SET NOCOUNT OFF;

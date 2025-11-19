@@ -19,21 +19,21 @@ BEGIN
 		IF @Xml IS NULL
 		   OR LEN(CAST(@Xml AS NVARCHAR(MAX))) = 0
 		BEGIN
-			SET @outResultCode = 50002;  -- Validación fallida
+			SET @outResultCode = 50002;
 			SET @descripcionEvento = 'Error: XML de LecturasMedidor vacío' ;
 			GOTO FinLect ;
 		END ;
 
 		IF @FechaOperacion IS NULL
 		BEGIN
-			SET @outResultCode = 50002;  -- Validación fallida
+			SET @outResultCode = 50002;
 			SET @descripcionEvento = 'Error: Fecha de operación no proporcionada para LecturasMedidor' ;
 			GOTO FinLect ;
 		END ;
 
 		IF @Xml.exist('/LecturasMedidor/Lectura') = 0
 		BEGIN
-			SET @outResultCode = 50012;  -- Sin cambios
+			SET @outResultCode = 50012;
 			SET @descripcionEvento = 'Sin cambios: No hay nodos <Lectura> en LecturasMedidor' ;
 			GOTO FinLect ;
 		END ;
@@ -67,131 +67,122 @@ BEGIN
 			WHERE IDPropiedad IS NULL
 		)
 		BEGIN
-			SET @outResultCode = 50001 ;  -- No encontrado
+			SET @outResultCode = 50001 ;
 			SET @descripcionEvento = 'Error: Al menos un medidor de LecturasMedidor no existe en Propiedad' ;
 			GOTO FinLect;
 		END ;
 
-		DECLARE @MovConsumoTmp TABLE
-		(
-			Fecha       DATE,
-			Monto       FLOAT,
-			NuevoSaldo  FLOAT,
-			IDTipo      INT,
-			IDPropiedad INT
-		) ;
-
 		BEGIN TRAN ;
 
-		;WITH LecturasTipo1 AS (
-			SELECT
-				L.IDPropiedad,
-				L.Valor,
-				CASE
-					WHEN P.UltimaLecturaMedidor IS NULL THEN 0
-					WHEN L.Valor - P.UltimaLecturaMedidor < 0 THEN 0
-					ELSE L.Valor - P.UltimaLecturaMedidor
-				END AS ConsumoDiff
-			FROM @Lecturas AS L
-			JOIN dbo.Propiedad AS P
-				ON P.ID = L.IDPropiedad
-			WHERE L.TipoMov = 1
-		)
-		UPDATE P
-		SET  P.UltimaLecturaMedidor = L.Valor ,
-			 P.SaldoM3             = P.SaldoM3 + L.ConsumoDiff
-		OUTPUT
-			@FechaOperacion,
-			L.ConsumoDiff,
-			inserted.SaldoM3,
-			1 ,
-			inserted.ID
-		INTO @MovConsumoTmp
-		(
-			Fecha,
-			Monto,
-			NuevoSaldo,
-			IDTipo,
-			IDPropiedad
-		)
-		FROM dbo.Propiedad AS P
-		JOIN LecturasTipo1 AS L
-			ON P.ID = L.IDPropiedad;
+		DECLARE @NumMedidor VARCHAR(32);
+		DECLARE @TipoMov INT;
+		DECLARE @Valor FLOAT;
+		DECLARE @IDPropiedad INT;
 
-		;WITH LecturasTipo2 AS (
-			SELECT
-				L.IDPropiedad,
-				CASE
-					WHEN L.Valor > P.SaldoM3 THEN P.SaldoM3
-					ELSE L.Valor
-				END AS ValorAplicado
-			FROM @Lecturas AS L
-			JOIN dbo.Propiedad AS P
-				ON P.ID = L.IDPropiedad
-			WHERE L.TipoMov = 2
-		)
-		UPDATE P
-		SET  P.SaldoM3 = P.SaldoM3 - L.ValorAplicado
-		OUTPUT
-			@FechaOperacion,
-			-L.ValorAplicado,
-			inserted.SaldoM3,
-			2 ,
-			inserted.ID
-		INTO @MovConsumoTmp
-		(
-			Fecha,
-			Monto,
-			NuevoSaldo,
-			IDTipo,
-			IDPropiedad
-		)
-		FROM dbo.Propiedad AS P
-		JOIN LecturasTipo2 AS L
-			ON P.ID = L.IDPropiedad ;
+		DECLARE lecturas_cursor CURSOR FOR
+		SELECT NumMedidor, TipoMov, Valor, IDPropiedad
+		FROM @Lecturas;
 
-		;WITH LecturasTipo3 AS (
-			SELECT
-				L.IDPropiedad,
-				L.Valor AS ValorAplicado
-			FROM @Lecturas AS L
-			WHERE L.TipoMov = 3
-		)
-		UPDATE P
-		SET  P.SaldoM3 = P.SaldoM3 + L.ValorAplicado
-		OUTPUT
-			@FechaOperacion,
-			L.ValorAplicado,
-			inserted.SaldoM3,
-			3,
-			inserted.ID
-		INTO @MovConsumoTmp
-		(
-			Fecha,
-			Monto,
-			NuevoSaldo,
-			IDTipo,
-			IDPropiedad
-		)
-		FROM dbo.Propiedad AS P
-		JOIN LecturasTipo3 AS L
-			ON P.ID = L.IDPropiedad ;
+		OPEN lecturas_cursor;
+		FETCH NEXT FROM lecturas_cursor INTO @NumMedidor, @TipoMov, @Valor, @IDPropiedad;
 
-		INSERT INTO dbo.MovConsumo
-		(
-			Fecha,
-			Monto,
-			NuevoSaldo,
-			IDTipo,
-			IDPropiedad
-		)
-		SELECT
-			Fecha,
-			Monto,
-			NuevoSaldo,
-			IDTipo,
-			IDPropiedad
-		FROM @MovConsumoTmp;
+		WHILE @@FETCH_STATUS = 0
+		BEGIN
+			IF @TipoMov = 1
+			BEGIN
+				DECLARE @ConsumoDiff FLOAT;
+				DECLARE @UltimaLectura FLOAT;
+
+				SELECT @UltimaLectura = UltimaLecturaMedidor
+				FROM dbo.Propiedad
+				WHERE ID = @IDPropiedad;
+
+				SET @ConsumoDiff = CASE
+					WHEN @UltimaLectura IS NULL THEN 0
+					WHEN @Valor - @UltimaLectura < 0 THEN 0
+					ELSE @Valor - @UltimaLectura
+				END;
+
+				UPDATE dbo.Propiedad
+				SET UltimaLecturaMedidor = @Valor,
+					SaldoM3 = SaldoM3 + @ConsumoDiff
+				WHERE ID = @IDPropiedad;
+
+				INSERT INTO dbo.MovConsumo(
+					Fecha,
+					Monto,
+					NuevoSaldo,
+					IDTipo,
+					IDPropiedad
+				)
+				VALUES(
+					@FechaOperacion,
+					@ConsumoDiff,
+					(SELECT SaldoM3 FROM dbo.Propiedad WHERE ID = @IDPropiedad),
+					1,
+					@IDPropiedad
+				);
+			END
+			ELSE IF @TipoMov = 2
+			BEGIN
+				DECLARE @ValorAplicado FLOAT;
+				DECLARE @SaldoActual FLOAT;
+
+				SELECT @SaldoActual = SaldoM3
+				FROM dbo.Propiedad
+				WHERE ID = @IDPropiedad;
+
+				SET @ValorAplicado = CASE
+					WHEN @Valor > @SaldoActual THEN @SaldoActual
+					ELSE @Valor
+				END;
+
+				UPDATE dbo.Propiedad
+				SET SaldoM3 = SaldoM3 - @ValorAplicado
+				WHERE ID = @IDPropiedad;
+
+				INSERT INTO dbo.MovConsumo(
+					Fecha,
+					Monto,
+					NuevoSaldo,
+					IDTipo,
+					IDPropiedad
+				)
+				VALUES(
+					@FechaOperacion,
+					-@ValorAplicado,
+					(SELECT SaldoM3 FROM dbo.Propiedad WHERE ID = @IDPropiedad),
+					2,
+					@IDPropiedad
+				);
+			END
+			ELSE IF @TipoMov = 3
+			BEGIN
+				UPDATE dbo.Propiedad
+				SET SaldoM3 = SaldoM3 + @Valor
+				WHERE ID = @IDPropiedad;
+
+				INSERT INTO dbo.MovConsumo(
+					Fecha,
+					Monto,
+					NuevoSaldo,
+					IDTipo,
+					IDPropiedad
+				)
+				VALUES(
+					@FechaOperacion,
+					@Valor,
+					(SELECT SaldoM3 FROM dbo.Propiedad WHERE ID = @IDPropiedad),
+					3,
+					@IDPropiedad
+				);
+			END
+
+			FETCH NEXT FROM lecturas_cursor INTO @NumMedidor, @TipoMov, @Valor, @IDPropiedad;
+		END;
+
+		CLOSE lecturas_cursor;
+		DEALLOCATE lecturas_cursor;
 
 		COMMIT TRAN;
 
@@ -213,25 +204,30 @@ FinLect:
 			ROLLBACK TRAN ;
 		END;
 
-		SET @outResultCode = 50008 ;  -- ErrorBD
-		DECLARE @ErrorNumber INT = ERROR_NUMBER();
-		DECLARE @ErrorState INT = ERROR_STATE();
-		DECLARE @ErrorSeverity INT = ERROR_SEVERITY();
-		DECLARE @ErrorLine INT = ERROR_LINE();
-		DECLARE @ErrorProcedure VARCHAR(32) = ERROR_PROCEDURE();
-		DECLARE @ErrorMessage VARCHAR(512) = ERROR_MESSAGE();
-		DECLARE @UserName VARCHAR(32) = SUSER_SNAME();
-		DECLARE @CurrentDate DATETIME = GETDATE();
+		SET @outResultCode = 50008 ;
 
-		EXEC dbo.InsertarError
-			@inSUSER_SNAME      = @UserName,
-			@inERROR_NUMBER     = @ErrorNumber,
-			@inERROR_STATE      = @ErrorState,
-			@inERROR_SEVERITY   = @ErrorSeverity,
-			@inERROR_LINE       = @ErrorLine,
-			@inERROR_PROCEDURE  = @ErrorProcedure,
-			@inERROR_MESSAGE    = @ErrorMessage,
-			@inGETDATE          = @CurrentDate;
+		INSERT INTO dbo.DBError
+		(
+			[UserName],
+			[Number],
+			[State],
+			[Severity],
+			[Line],
+			[Procedure],
+			[Message],
+			[DateTime]
+		)
+		VALUES
+		(
+			SUSER_SNAME(),
+			ERROR_NUMBER(),
+			ERROR_STATE(),
+			ERROR_SEVERITY(),
+			ERROR_LINE(),
+			ERROR_PROCEDURE(),
+			ERROR_MESSAGE(),
+			GETDATE()
+		);
 	END CATCH;
 
 	SET NOCOUNT OFF;
