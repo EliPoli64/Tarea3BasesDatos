@@ -1,74 +1,3 @@
-CREATE OR ALTER TRIGGER dbo.PropiedadDespuesInsert
-ON dbo.Propiedad
-AFTER INSERT
-AS
-BEGIN
-    SET NOCOUNT ON;
-    
-    DECLARE @BaseID INT;
-    SELECT @BaseID = ISNULL(MAX(ID), 0) FROM dbo.PropiedadXCC;
-    
-    INSERT INTO dbo.PropiedadXCC (
-            ID
-            , IDPropiedad
-            , IDCC
-            , FechaAsociacion
-            , Activo
-        )
-    SELECT 
-            @BaseID + ROW_NUMBER() OVER (ORDER BY i.ID)
-            , i.ID
-            , CASE WHEN 1 = 1 THEN 1 END
-            , GETDATE()
-            , 1
-    FROM inserted i
-    WHERE NOT EXISTS (
-        SELECT 1 FROM dbo.PropiedadXCC PXC 
-        WHERE PXC.IDPropiedad = i.ID AND PXC.IDCC = 1
-    )
-    UNION ALL
-    SELECT 
-            @BaseID + ROW_NUMBER() OVER (ORDER BY i.ID) + (SELECT COUNT(*) FROM inserted)
-            , i.ID
-            , CASE WHEN 1 = 1 THEN 2 END
-            , GETDATE()
-            , 1
-    FROM inserted i
-    WHERE NOT EXISTS (
-        SELECT 1 FROM dbo.PropiedadXCC PXC 
-        WHERE PXC.IDPropiedad = i.ID AND PXC.IDCC = 2
-    )
-    UNION ALL
-    SELECT 
-            @BaseID + ROW_NUMBER() OVER (ORDER BY i.ID) + (SELECT COUNT(*) FROM inserted)*2
-            , i.ID
-            , CASE WHEN i.IDTipoArea != 2 THEN 3 END
-            , GETDATE()
-            , 1
-    FROM inserted i
-    WHERE i.IDTipoArea != 2
-    AND NOT EXISTS (
-        SELECT 1 FROM dbo.PropiedadXCC PXC 
-        WHERE PXC.IDPropiedad = i.ID AND PXC.IDCC = 3
-    )
-    UNION ALL
-    SELECT 
-            @BaseID + ROW_NUMBER() OVER (ORDER BY i.ID) + (SELECT COUNT(*) FROM inserted)*3
-            , i.ID
-            , CASE WHEN i.IDTipoArea IN (1, 5) THEN 7 END
-            , GETDATE()
-            , 1
-    FROM inserted i
-    WHERE i.IDTipoArea IN (1, 5)
-    AND NOT EXISTS (
-        SELECT 1 FROM dbo.PropiedadXCC PXC 
-        WHERE PXC.IDPropiedad = i.ID AND PXC.IDCC = 7
-    );
-END;
-GO
-
----
-
 CREATE OR ALTER TRIGGER dbo.PropiedadAntesInsert
 ON dbo.Propiedad
 INSTEAD OF INSERT
@@ -76,48 +5,140 @@ AS
 BEGIN
     SET NOCOUNT ON;
     
-    IF EXISTS (
-        SELECT 1 
-        FROM inserted i 
-        INNER JOIN dbo.Propiedad p ON i.NumFinca = p.NumFinca
-    )
-    BEGIN
-        RAISERROR('No se puede insertar propiedad con número de finca duplicado', 16, 1);
-        RETURN;
-    END;
-    
-    INSERT INTO dbo.Propiedad (
-            ID
-            , NumFinca
-            , Area
-            , ValorPropiedad
-            , FechaRegistro
-            , IDTipoUso
-            , IDTipoArea
-            , SaldoM3
-            , SaldoM3UltimaFactura
-            , NumMedidor
-            , UltimaLecturaMedidor
-            , EsActivo
+    BEGIN TRY
+        BEGIN TRANSACTION;
+        
+        -- Verificar duplicados de NumFinca
+        IF EXISTS (
+            SELECT 1 
+            FROM inserted i 
+            INNER JOIN dbo.Propiedad p ON i.NumFinca = p.NumFinca
         )
-    SELECT 
-            ID
-            , NumFinca
-            , Area
-            , ValorPropiedad
-            , FechaRegistro
-            , IDTipoUso
-            , IDTipoArea
-            , SaldoM3
-            , SaldoM3UltimaFactura
-            , NumMedidor
-            , UltimaLecturaMedidor
-            , 1
-    FROM inserted;
+        BEGIN
+            RAISERROR('No se puede insertar propiedad con número de finca duplicado', 16, 1);
+            ROLLBACK TRANSACTION;
+            RETURN;
+        END;
+        
+        -- Generar nuevo ID si no viene en el INSERT
+        DECLARE @NuevoID INT;
+        SELECT @NuevoID = ISNULL(MAX(ID), 0) + 1 FROM dbo.Propiedad;
+        
+        INSERT INTO dbo.Propiedad (
+            ID,
+            NumFinca,
+            Area,
+            ValorPropiedad,
+            FechaRegistro,
+            IDTipoUso,
+            IDTipoArea,
+            SaldoM3,
+            SaldoM3UltimaFactura,
+            NumMedidor,
+            UltimaLecturaMedidor,
+            EsActivo
+        )
+        SELECT 
+            @NuevoID + ROW_NUMBER() OVER (ORDER BY (SELECT NULL)),
+            NumFinca,
+            Area,
+            ValorPropiedad,
+            ISNULL(FechaRegistro, GETDATE()),
+            IDTipoUso,
+            IDTipoArea,
+            ISNULL(SaldoM3, 0),
+            ISNULL(SaldoM3UltimaFactura, 0),
+            NumMedidor,
+            UltimaLecturaMedidor,
+            1
+        FROM inserted;
+        
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0
+            ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH;
 END;
 GO
 
----
+CREATE OR ALTER TRIGGER dbo.PropiedadDespuesInsert
+ON dbo.Propiedad
+AFTER INSERT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    
+    BEGIN TRY
+        -- Obtener el máximo ID actual de PropiedadXCC
+        DECLARE @BaseID INT;
+        SELECT @BaseID = ISNULL(MAX(ID), 0) FROM dbo.PropiedadXCC;
+        
+        -- Asignar CC por defecto basado en reglas de negocio
+        INSERT INTO dbo.PropiedadXCC (
+            ID,
+            IDPropiedad,
+            IDCC,
+            FechaAsociacion,
+            Activo
+        )
+        -- CC 1: ConsumoAgua (siempre se asigna)
+        SELECT 
+            @BaseID + ROW_NUMBER() OVER (ORDER BY i.ID),
+            i.ID,
+            1, -- ConsumoAgua
+            GETDATE(),
+            1
+        FROM inserted i
+        
+        UNION ALL
+        
+        -- CC 3: ImpuestoPropiedad (siempre se asigna)
+        SELECT 
+            @BaseID + (SELECT COUNT(*) FROM inserted) + ROW_NUMBER() OVER (ORDER BY i.ID),
+            i.ID,
+            3, -- ImpuestoPropiedad
+            GETDATE(),
+            1
+        FROM inserted i
+        
+        UNION ALL
+        
+        -- CC 4: RecoleccionBasura (excepto áreas agrícolas - IDTipoArea = 2)
+        SELECT 
+            @BaseID + (SELECT COUNT(*) FROM inserted)*2 + ROW_NUMBER() OVER (ORDER BY i.ID),
+            i.ID,
+            4, -- RecoleccionBasura
+            GETDATE(),
+            1
+        FROM inserted i
+        WHERE i.IDTipoArea != 2
+        
+        UNION ALL
+        
+        -- CC 5: MantenimientoParques (solo áreas residenciales y comerciales - IDTipoArea 1 y 5)
+        SELECT 
+            @BaseID + (SELECT COUNT(*) FROM inserted)*3 + ROW_NUMBER() OVER (ORDER BY i.ID),
+            i.ID,
+            5, -- MantenimientoParques
+            GETDATE(),
+            1
+        FROM inserted i
+        WHERE i.IDTipoArea IN (1, 5);
+        
+    END TRY
+    BEGIN CATCH
+        -- Registrar error pero no fallar la inserción de la propiedad
+        INSERT INTO dbo.DBError (
+            UserName, Number, State, Severity, Line, [Procedure], Message, DateTime
+        ) VALUES (
+            SUSER_SNAME(), ERROR_NUMBER(), ERROR_STATE(), ERROR_SEVERITY(), 
+            ERROR_LINE(), 'PropiedadDespuesInsert', ERROR_MESSAGE(), GETDATE()
+        );
+    END CATCH;
+END;
+GO
 
 CREATE OR ALTER TRIGGER dbo.PropietarioAntesInsert
 ON dbo.Propietario
@@ -126,309 +147,49 @@ AS
 BEGIN
     SET NOCOUNT ON;
     
-    IF EXISTS (
-        SELECT 1 
-        FROM inserted i 
-        INNER JOIN dbo.Propietario p ON i.ValorDocumentoId = p.ValorDocumentoId
-    )
-    BEGIN
-        RAISERROR('No se puede insertar propietario con documento de identidad duplicado', 16, 1);
-        RETURN;
-    END;
-    
-    INSERT INTO dbo.Propietario (
-            ID
-            , Nombre
-            , ValorDocumentoId
-            , Telefono
-            , EsActivo
+    BEGIN TRY
+        BEGIN TRANSACTION;
+        
+        -- Verificar duplicados de documento
+        IF EXISTS (
+            SELECT 1 
+            FROM inserted i 
+            INNER JOIN dbo.Propietario p ON i.ValorDocumentoId = p.ValorDocumentoId
         )
-    SELECT 
-            ID
-            , Nombre
-            , ValorDocumentoId
-            , Telefono
-            , 1
-    FROM inserted;
-END;
-GO
-
----
-
-CREATE OR ALTER TRIGGER dbo.AsociacionPxPAntesInsert
-ON dbo.AsociacionPxP
-INSTEAD OF INSERT
-AS
-BEGIN
-    SET NOCOUNT ON;
-    
-    BEGIN TRANSACTION;
-    
-    UPDATE dbo.AsociacionPxP
-    SET FechaFin = DATEADD(DAY, -1, (SELECT FechaInicio FROM inserted))
-    WHERE IDPropiedad IN (SELECT IDPropiedad FROM inserted)
-        AND IDPropietario IN (SELECT IDPropietario FROM inserted)
-        AND FechaFin = '9999-12-31'
-        AND IDTipoAsociacion = 1;
-    
-    INSERT INTO dbo.AsociacionPxP (
-            FechaInicio
-            , FechaFin
-            , IDPropiedad
-            , IDPropietario
-            , IDTipoAsociacion
+        BEGIN
+            RAISERROR('No se puede insertar propietario con documento de identidad duplicado', 16, 1);
+            ROLLBACK TRANSACTION;
+            RETURN;
+        END;
+        
+        -- Generar nuevo ID si no viene
+        DECLARE @NuevoID INT;
+        SELECT @NuevoID = ISNULL(MAX(ID), 0) + 1 FROM dbo.Propietario;
+        
+        INSERT INTO dbo.Propietario (
+            ID,
+            Nombre,
+            ValorDocumentoId,
+            Telefono,
+            EsActivo
         )
-    SELECT 
-            FechaInicio
-            , FechaFin
-            , IDPropiedad
-            , IDPropietario
-            , IDTipoAsociacion
-    FROM inserted;
-    
-    COMMIT TRANSACTION;
+        SELECT 
+            @NuevoID + ROW_NUMBER() OVER (ORDER BY (SELECT NULL)),
+            Nombre,
+            ValorDocumentoId,
+            Telefono,
+            1
+        FROM inserted;
+        
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0
+            ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH;
 END;
 GO
-
----
-
-CREATE OR ALTER TRIGGER dbo.MovConsumoAntesInsert
-ON dbo.MovConsumo
-INSTEAD OF INSERT
-AS
-BEGIN
-    SET NOCOUNT ON;
-    
-    IF EXISTS (
-        SELECT 1 
-        FROM inserted i 
-        LEFT JOIN dbo.Propiedad p ON i.IDPropiedad = p.ID 
-        WHERE p.ID IS NULL
-    )
-    BEGIN
-        RAISERROR('Una o más propiedades referenciadas no existen', 16, 1);
-        RETURN;
-    END;
-    
-    IF EXISTS (
-        SELECT 1 
-        FROM inserted i 
-        LEFT JOIN dbo.TipoMovConsumo t ON i.IDTipo = t.ID 
-        WHERE t.ID IS NULL
-    )
-    BEGIN
-        RAISERROR('Uno o más tipos de movimiento no existen', 16, 1);
-        RETURN;
-    END;
-    
-    INSERT INTO dbo.MovConsumo (
-            Fecha
-            , Monto
-            , NuevoSaldo
-            , IDTipo
-            , IDPropiedad
-        )
-    SELECT 
-            Fecha
-            , Monto
-            , NuevoSaldo
-            , IDTipo
-            , IDPropiedad
-    FROM inserted;
-END;
-GO
-
----
-
-CREATE OR ALTER TRIGGER dbo.FacturaAntesInsert
-ON dbo.Factura
-INSTEAD OF INSERT
-AS
-BEGIN
-    SET NOCOUNT ON;
-    
-    IF EXISTS (
-        SELECT 1 
-        FROM inserted i 
-        INNER JOIN dbo.Factura f ON i.IDPropiedad = f.IDPropiedad 
-            AND i.FechaFactura = f.FechaFactura
-            AND f.EstadoFactura = 0
-    )
-    BEGIN
-        RAISERROR('Ya existe una factura pendiente para esta propiedad en esta fecha', 16, 1);
-        RETURN;
-    END;
-    
-    INSERT INTO dbo.Factura (
-            FechaFactura
-            , FechaLimitePago
-            , FechaCorteAgua
-            , IDPropiedad
-            , TotalPagarOriginal
-            , EstadoFactura
-            , IDTipoMedioPago
-            , TotalPagarFinal
-        )
-    SELECT 
-            FechaFactura
-            , FechaLimitePago
-            , FechaCorteAgua
-            , IDPropiedad
-            , TotalPagarOriginal
-            , EstadoFactura
-            , IDTipoMedioPago
-            , TotalPagarFinal
-    FROM inserted;
-END;
-GO
-
----
-
-CREATE OR ALTER TRIGGER dbo.ComprobantePagoAntesInsert
-ON dbo.ComprobantePago
-INSTEAD OF INSERT
-AS
-BEGIN
-    SET NOCOUNT ON;
-    
-    IF EXISTS (
-        SELECT 1 
-        FROM inserted i 
-        LEFT JOIN dbo.Propiedad p ON i.IDPropiedad = p.ID 
-        WHERE p.ID IS NULL
-    )
-    BEGIN
-        RAISERROR('Una o más propiedades referenciadas no existen', 16, 1);
-        RETURN;
-    END;
-    
-    IF EXISTS (
-        SELECT 1 
-        FROM inserted i 
-        INNER JOIN dbo.ComprobantePago cp ON i.Codigo = cp.Codigo
-    )
-    BEGIN
-        RAISERROR('Ya existe un comprobante de pago con este código', 16, 1);
-        RETURN;
-    END;
-    
-    INSERT INTO dbo.ComprobantePago (
-            Fecha
-            , Codigo
-            , IDPropiedad
-        )
-    SELECT 
-            Fecha
-            , Codigo
-            , IDPropiedad
-    FROM inserted;
-END;
-GO
-
----
-
-CREATE OR ALTER TRIGGER dbo.OrdenCorteAntesInsert
-ON dbo.OrdenCorte
-INSTEAD OF INSERT
-AS
-BEGIN
-    SET NOCOUNT ON;
-    
-    IF EXISTS (
-        SELECT 1 
-        FROM inserted i 
-        LEFT JOIN dbo.Factura f ON i.IDFactura = f.ID 
-        WHERE f.ID IS NULL
-    )
-    BEGIN
-        RAISERROR('Una o más facturas referenciadas no existen', 16, 1);
-        RETURN;
-    END;
-    
-    IF EXISTS (
-        SELECT 1 
-        FROM inserted i 
-        INNER JOIN dbo.OrdenCorte oc ON i.IDFactura = oc.IDFactura 
-            AND oc.Estado = 1
-    )
-    BEGIN
-        RAISERROR('Ya existe una orden de corte activa para esta factura', 16, 1);
-        RETURN;
-    END;
-    
-    INSERT INTO dbo.OrdenCorte (
-            Fecha
-            , Estado
-            , IDFactura
-        )
-    SELECT 
-            Fecha
-            , Estado
-            , IDFactura
-    FROM inserted;
-END;
-GO
-
----
-
-CREATE OR ALTER TRIGGER dbo.OrdenReconexionAntesInsert
-ON dbo.OrdenReconexion
-INSTEAD OF INSERT
-AS
-BEGIN
-    SET NOCOUNT ON;
-    
-    IF EXISTS (
-        SELECT 1 
-        FROM inserted i 
-        LEFT JOIN dbo.OrdenCorte oc ON i.IDOrdenCorte = oc.ID 
-        WHERE oc.ID IS NULL
-    )
-    BEGIN
-        RAISERROR('Una o más órdenes de corte referenciadas no existen', 16, 1);
-        RETURN;
-    END;
-    
-    IF EXISTS (
-        SELECT 1 
-        FROM inserted i 
-        INNER JOIN dbo.OrdenReconexion orx ON i.IDOrdenCorte = orx.IDOrdenCorte
-    )
-    BEGIN
-        RAISERROR('Ya existe una orden de reconexión para esta orden de corte', 16, 1);
-        RETURN;
-    END;
-    
-    INSERT INTO dbo.OrdenReconexion (
-            ID
-            , Fecha
-            , IDOrdenCorte
-        )
-    SELECT 
-            ID
-            , Fecha
-            , IDOrdenCorte
-    FROM inserted;
-END;
-GO
-
----
-
-CREATE OR ALTER TRIGGER dbo.MovConsumoDespuesInsertUpdateSaldo
-ON dbo.MovConsumo
-AFTER INSERT
-AS
-BEGIN
-    SET NOCOUNT ON;
-    
-    UPDATE p
-    SET p.SaldoM3 = i.NuevoSaldo
-    FROM dbo.Propiedad p
-    INNER JOIN inserted i ON p.ID = i.IDPropiedad;
-END;
-GO
-
----
 
 CREATE OR ALTER TRIGGER dbo.UsuarioAntesInsert
 ON dbo.Usuario
@@ -437,29 +198,222 @@ AS
 BEGIN
     SET NOCOUNT ON;
     
-    IF EXISTS (
-        SELECT 1 
-        FROM inserted i 
-        INNER JOIN dbo.Usuario u ON i.UserName = u.UserName
-    )
-    BEGIN
-        RAISERROR('No se puede insertar usuario con nombre de usuario duplicado', 16, 1);
-        RETURN;
-    END;
-    
-    INSERT INTO dbo.Usuario (
-            ID
-            , UserName
-            , Password
-            , EsActivo
-            , IDTipo
+    BEGIN TRY
+        BEGIN TRANSACTION;
+        
+        -- Verificar duplicados de UserName
+        IF EXISTS (
+            SELECT 1 
+            FROM inserted i 
+            INNER JOIN dbo.Usuario u ON i.UserName = u.UserName
         )
-    SELECT 
-            ID
-            , UserName
-            , Password
-            , EsActivo
-            , IDTipo
-    FROM inserted;
+        BEGIN
+            RAISERROR('No se puede insertar usuario con nombre de usuario duplicado', 16, 1);
+            ROLLBACK TRANSACTION;
+            RETURN;
+        END;
+        
+        -- Generar nuevo ID si no viene
+        DECLARE @NuevoID INT;
+        SELECT @NuevoID = ISNULL(MAX(ID), 0) + 1 FROM dbo.Usuario;
+        
+        INSERT INTO dbo.Usuario (
+            ID,
+            UserName,
+            Password,
+            EsActivo,
+            IDTipo
+        )
+        SELECT 
+            @NuevoID + ROW_NUMBER() OVER (ORDER BY (SELECT NULL)),
+            UserName,
+            Password,
+            ISNULL(EsActivo, 1),
+            IDTipo
+        FROM inserted;
+        
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0
+            ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH;
+END;
+GO
+
+CREATE OR ALTER TRIGGER dbo.FacturaAntesInsert
+ON dbo.Factura
+INSTEAD OF INSERT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    
+    BEGIN TRY
+        BEGIN TRANSACTION;
+        
+        -- Verificar si ya existe factura pendiente para la misma propiedad y mes
+        IF EXISTS (
+            SELECT 1 
+            FROM inserted i 
+            INNER JOIN dbo.Factura f ON i.IDPropiedad = f.IDPropiedad 
+                AND YEAR(i.FechaFactura) = YEAR(f.FechaFactura)
+                AND MONTH(i.FechaFactura) = MONTH(f.FechaFactura)
+                AND f.EstadoFactura = 0
+        )
+        BEGIN
+            RAISERROR('Ya existe una factura pendiente para esta propiedad en este mes', 16, 1);
+            ROLLBACK TRANSACTION;
+            RETURN;
+        END;
+        
+        -- Insertar normalmente (Factura.ID es identity)
+        INSERT INTO dbo.Factura (
+            FechaFactura,
+            FechaLimitePago,
+            FechaCorteAgua,
+            IDPropiedad,
+            TotalPagarOriginal,
+            EstadoFactura,
+            IDTipoMedioPago,
+            TotalPagarFinal
+        )
+        SELECT 
+            FechaFactura,
+            FechaLimitePago,
+            FechaCorteAgua,
+            IDPropiedad,
+            TotalPagarOriginal,
+            ISNULL(EstadoFactura, 0),
+            ISNULL(IDTipoMedioPago, 1),
+            ISNULL(TotalPagarFinal, TotalPagarOriginal)
+        FROM inserted;
+        
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0
+            ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH;
+END;
+GO
+
+CREATE OR ALTER TRIGGER dbo.MovConsumoAntesInsert
+ON dbo.MovConsumo
+INSTEAD OF INSERT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    
+    BEGIN TRY
+        BEGIN TRANSACTION;
+        
+        -- Verificar que las propiedades existen
+        IF EXISTS (
+            SELECT 1 
+            FROM inserted i 
+            LEFT JOIN dbo.Propiedad p ON i.IDPropiedad = p.ID 
+            WHERE p.ID IS NULL
+        )
+        BEGIN
+            RAISERROR('Una o más propiedades referenciadas no existen', 16, 1);
+            ROLLBACK TRANSACTION;
+            RETURN;
+        END;
+        
+        -- Verificar que los tipos de movimiento existen
+        IF EXISTS (
+            SELECT 1 
+            FROM inserted i 
+            LEFT JOIN dbo.TipoMovConsumo t ON i.IDTipo = t.ID 
+            WHERE t.ID IS NULL
+        )
+        BEGIN
+            RAISERROR('Uno o más tipos de movimiento no existen', 16, 1);
+            ROLLBACK TRANSACTION;
+            RETURN;
+        END;
+        
+        -- Insertar normalmente (MovConsumo.ID es identity)
+        INSERT INTO dbo.MovConsumo (
+            Fecha,
+            Monto,
+            NuevoSaldo,
+            IDTipo,
+            IDPropiedad
+        )
+        SELECT 
+            ISNULL(Fecha, GETDATE()),
+            Monto,
+            NuevoSaldo,
+            IDTipo,
+            IDPropiedad
+        FROM inserted;
+        
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0
+            ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH;
+END;
+GO
+
+CREATE OR ALTER TRIGGER dbo.ComprobantePagoAntesInsert
+ON dbo.ComprobantePago
+INSTEAD OF INSERT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    
+    BEGIN TRY
+        BEGIN TRANSACTION;
+        
+        -- Verificar que las propiedades existen
+        IF EXISTS (
+            SELECT 1 
+            FROM inserted i 
+            LEFT JOIN dbo.Propiedad p ON i.IDPropiedad = p.ID 
+            WHERE p.ID IS NULL
+        )
+        BEGIN
+            RAISERROR('Una o más propiedades referenciadas no existen', 16, 1);
+            ROLLBACK TRANSACTION;
+            RETURN;
+        END;
+        
+        -- Verificar duplicados de código (opcional, si quieres códigos únicos)
+        IF EXISTS (
+            SELECT 1 
+            FROM inserted i 
+            INNER JOIN dbo.ComprobantePago cp ON i.Codigo = cp.Codigo
+        )
+        BEGIN
+            RAISERROR('Ya existe un comprobante de pago con este código', 16, 1);
+            ROLLBACK TRANSACTION;
+            RETURN;
+        END;
+        
+        -- Insertar normalmente (ComprobantePago.ID es identity)
+        INSERT INTO dbo.ComprobantePago (
+            Fecha,
+            Codigo,
+            IDPropiedad
+        )
+        SELECT 
+            ISNULL(Fecha, GETDATE()),
+            Codigo,
+            IDPropiedad
+        FROM inserted;
+        
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0
+            ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH;
 END;
 GO
