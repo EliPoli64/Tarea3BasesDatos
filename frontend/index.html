@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Municipalidad - Sistema de Servicios</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div id="pantallaInicioSesion" class="login-container">
+        <div class="login-card">
+            <div class="login-logo">
+                <h1><i class="fas fa-city"></i> Municipalidad</h1>
+                <p>Sistema de Servicios Públicos</p>
+            </div>
+            <form id="formularioInicioSesion">
+                <div class="form-group">
+                    <label class="form-label" for="nombreUsuario">Usuario</label>
+                    <input type="text" id="nombreUsuario" class="form-input" placeholder="Ingrese su usuario" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="contrasena">Contraseña</label>
+                    <input type="password" id="contrasena" class="form-input" placeholder="Ingrese su contraseña" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Iniciar Sesión</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="app" class="app-container" style="display: none;">
+        <div class="sidebar">
+            <div class="logo-container">
+                <div class="logo">
+                    <i class="fas fa-city"></i> Municipalidad
+                </div>
+            </div>
+            <div class="nav-menu">
+                <div class="nav-item active" data-section="dashboard">
+                    <i class="fas fa-home"></i> Dashboard
+                </div>
+                <div class="nav-item" data-section="propertySearch">
+                    <i class="fas fa-search"></i> Buscar Propiedades
+                </div>
+                <div class="nav-item" data-section="payments">
+                    <i class="fas fa-credit-card"></i> Pagos
+                </div>
+                <div class="nav-item" data-section="reports">
+                    <i class="fas fa-chart-bar"></i> Reportes
+                </div>
+                <div class="nav-item" data-section="settings">
+                    <i class="fas fa-cog"></i> Configuración
+                </div>
+            </div>
+            <div class="user-profile">
+                <div class="user-avatar" id="avatarUsuario">A</div>
+                <div class="user-info">
+                    <div class="user-name" id="nombreUsuarioDisplay">Administrador</div>
+                    <div class="user-role">Usuario Administrador</div>
+                </div>
+                <div class="icon-button" id="btnCerrarSesion">
+                    <i class="fas fa-sign-out-alt"></i>
+                </div>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div class="top-bar">
+                <div class="page-title" id="tituloPagina">Dashboard</div>
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" placeholder="Buscar...">
+                </div>
+                <div class="user-actions">
+                    <div class="icon-button">
+                        <i class="fas fa-bell"></i>
+                    </div>
+                    <div class="icon-button">
+                        <i class="fas fa-question-circle"></i>
+                    </div>
+                </div>
+            </div>
+
+            <div class="content-area">
+                <div id="dashboard" class="section active">
+                    <div class="stats-container">
+                        <div class="stat-card">
+                            <div class="stat-value" id="totalPropiedades">0</div>
+                            <div class="stat-label">Propiedades Activas</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="recaudacionMes">₡ 0</div>
+                            <div class="stat-label">Recaudación del Mes</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="facturasPendientes">0</div>
+                            <div class="stat-label">Facturas Pendientes</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="cortesProgramados">0</div>
+                            <div class="stat-label">Cortes Programados</div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-title">Actividad Reciente</div>
+                        </div>
+                        <div class="card-content">
+                            <div class="invoice-list" id="actividadReciente">
+                                <div class="invoice-item">
+                                    <div class="invoice-icon">
+                                        <i class="fas fa-file-invoice-dollar"></i>
+                                    </div>
+                                    <div class="invoice-details">
+                                        <div class="invoice-number">Inicie sesión para ver la actividad</div>
+                                        <div class="invoice-date">Sistema de Municipalidad</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="propertySearch" class="section">
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-title">Buscar Propiedades</div>
+                        </div>
+                        <div class="card-content">
+                            <div class="tab-container">
+                                <div class="tab active" data-tab="finca">Por Número de Finca</div>
+                                <div class="tab" data-tab="documento">Por Documento de Propietario</div>
+                            </div>
+
+                            <div id="fincaTab" class="tab-content">
+                                <div class="search-container">
+                                    <input type="text" id="busquedaFinca" placeholder="Ingrese el número de finca">
+                                    <button class="btn btn-primary" id="btnBuscarFinca">
+                                        <i class="fas fa-search"></i> Buscar
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div id="documentoTab" class="tab-content" style="display: none;">
+                                <div class="search-container">
+                                    <input type="text" id="busquedaDocumento" placeholder="Ingrese el documento de identidad">
+                                    <button class="btn btn-primary" id="btnBuscarDocumento">
+                                        <i class="fas fa-search"></i> Buscar
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div id="resultadosBusqueda" style="margin-top: 20px;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="payments" class="section">
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-title">Pago de Facturas</div>
+                        </div>
+                        <div class="content-area">
+                            <div class="title">Busque primero una propiedad para pagar sus facturas.</div>
+                        </div>
+                        <div class="card-content">
+                            <div id="infoPropiedad" style="margin-bottom: 20px;"></div>
+                            <div id="listaFacturas"></div>
+                            <div id="previsualizacionPago" class="payment-preview" style="display: none;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="reports" class="section">
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-title">Reportes del Sistema</div>
+                        </div>
+                        <div class="card-content">
+                            <div class="tab-container">
+                                <div class="tab active" data-tab="facturasPendientes">Facturas Pendientes</div>
+                                <div class="tab" data-tab="recaudacionCC">Recaudación por CC</div>
+                                <div class="tab" data-tab="propiedadesMorosas">Propiedades Morosas</div>
+                                <div class="tab" data-tab="consumoAgua">Consumo de Agua</div>
+                                <div class="tab" data-tab="cortesReconexiones">Cortes y Reconexiones</div>
+                                <div class="tab" data-tab="estadisticasPagos">Estadísticas de Pagos</div>
+                            </div>
+
+                            <div id="facturasPendientesTab" class="tab-content">
+                                <div class="report-filters">
+                                    <div class="form-group">
+                                        <label class="form-label">Fecha Inicio</label>
+                                        <input type="date" id="fechaInicioFacturas" class="form-input">
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">Fecha Fin</label>
+                                        <input type="date" id="fechaFinFacturas" class="form-input">
+                                    </div>
+                                    <button class="btn btn-primary" onclick="generarReporteFacturasPendientes()">
+                                        <i class="fas fa-file-invoice"></i> Generar Reporte
+                                    </button>
+                                </div>
+                                <div id="resultadoReporteFacturas" class="report-results"></div>
+                            </div>
+
+                            <div id="recaudacionCCTab" class="tab-content" style="display: none;">
+                                <div class="report-filters">
+                                    <div class="form-group">
+                                        <label class="form-label">Fecha Inicio</label>
+                                        <input type="date" id="fechaInicioRecaudacion" class="form-input">
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">Fecha Fin</label>
+                                        <input type="date" id="fechaFinRecaudacion" class="form-input">
+                                    </div>
+                                    <button class="btn btn-primary" onclick="generarReporteRecaudacionCC()">
+                                        <i class="fas fa-chart-pie"></i> Generar Reporte
+                                    </button>
+                                </div>
+                                <div id="resultadoReporteRecaudacion" class="report-results"></div>
+                            </div>
+
+                            <div id="propiedadesMorosasTab" class="tab-content" style="display: none;">
+                                <div class="report-filters">
+                                    <button class="btn btn-warning" onclick="generarReportePropiedadesMorosas()">
+                                        <i class="fas fa-exclamation-triangle"></i> Generar Reporte
+                                    </button>
+                                </div>
+                                <div id="resultadoReporteMorosas" class="report-results"></div>
+                            </div>
+
+                            <div id="consumoAguaTab" class="tab-content" style="display: none;">
+                                <div class="report-filters">
+                                    <div class="form-group">
+                                        <label class="form-label">Fecha Inicio</label>
+                                        <input type="date" id="fechaInicioConsumo" class="form-input">
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">Fecha Fin</label>
+                                        <input type="date" id="fechaFinConsumo" class="form-input">
+                                    </div>
+                                    <button class="btn btn-primary" onclick="generarReporteConsumoAgua()">
+                                        <i class="fas fa-tint"></i> Generar Reporte
+                                    </button>
+                                </div>
+                                <div id="resultadoReporteConsumo" class="report-results"></div>
+                            </div>
+
+                            <div id="cortesReconexionesTab" class="tab-content" style="display: none;">
+                                <div class="report-filters">
+                                    <div class="form-group">
+                                        <label class="form-label">Fecha Inicio</label>
+                                        <input type="date" id="fechaInicioCortes" class="form-input">
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">Fecha Fin</label>
+                                        <input type="date" id="fechaFinCortes" class="form-input">
+                                    </div>
+                                    <button class="btn btn-primary" onclick="generarReporteCortesReconexiones()">
+                                        <i class="fas fa-faucet-drip"></i> Generar Reporte
+                                    </button>
+                                </div>
+                                <div id="resultadoReporteCortes" class="report-results"></div>
+                            </div>
+
+                            <div id="estadisticasPagosTab" class="tab-content" style="display: none;">
+                                <div class="report-filters">
+                                    <div class="form-group">
+                                        <label class="form-label">Meses a Consultar</label>
+                                        <select id="mesesEstadisticas" class="form-input">
+                                            <option value="3">Últimos 3 meses</option>
+                                            <option value="6" selected>Últimos 6 meses</option>
+                                            <option value="12">Últimos 12 meses</option>
+                                            <option value="24">Últimos 24 meses</option>
+                                        </select>
+                                    </div>
+                                    <button class="btn btn-primary" onclick="generarReporteEstadisticasPagos()">
+                                        <i class="fas fa-chart-line"></i> Generar Reporte
+                                    </button>
+                                </div>
+                                <div id="resultadoReporteEstadisticas" class="report-results"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="settings" class="section">
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-title">Configuración del Sistema</div>
+                        </div>
+                        <div class="card-content">
+                            <div class="config-section">
+                                <h4><i class="fas fa-cog"></i> Parámetros del Sistema</h4>
+                                <div class="parametros-list">
+                                    <div class="parametro-item">
+                                        <div class="parametro-info">
+                                            <span class="parametro-label">Días para vencimiento de facturas:</span>
+                                            <span class="parametro-desc">Número de días después de la fecha de factura para el vencimiento</span>
+                                        </div>
+                                        <div class="parametro-control">
+                                            <input type="number" id="diasVencimiento" class="form-input" min="1" max="30" value="15">
+                                            <button class="btn btn-primary btn-sm" onclick="actualizarParametro('diasVencimiento')">Actualizar</button>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="parametro-item">
+                                        <div class="parametro-info">
+                                            <span class="parametro-label">Días de gracia para corte de agua:</span>
+                                            <span class="parametro-desc">Días después del vencimiento para generar orden de corte</span>
+                                        </div>
+                                        <div class="parametro-control">
+                                            <input type="number" id="diasGraciaCorte" class="form-input" min="1" max="30" value="10">
+                                            <button class="btn btn-primary btn-sm" onclick="actualizarParametro('diasGraciaCorte')">Actualizar</button>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="parametro-item">
+                                        <div class="parametro-info">
+                                            <span class="parametro-label">Porcentaje de intereses moratorios (% mensual):</span>
+                                            <span class="parametro-desc">Porcentaje aplicado diariamente para intereses moratorios</span>
+                                        </div>
+                                        <div class="parametro-control">
+                                            <input type="number" id="porcentajeMoratorios" class="form-input" min="0.1" max="10" step="0.1" value="4.0">
+                                            <button class="btn btn-primary btn-sm" onclick="actualizarParametro('porcentajeMoratorios')">Actualizar</button>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="parametro-item">
+                                        <div class="parametro-info">
+                                            <span class="parametro-label">Monto de reconexión de agua:</span>
+                                            <span class="parametro-desc">Costo fijo por reconexión del servicio de agua</span>
+                                        </div>
+                                        <div class="parametro-control">
+                                            <input type="number" id="montoReconexion" class="form-input" min="0" step="1000" value="30000">
+                                            <button class="btn btn-primary btn-sm" onclick="actualizarParametro('montoReconexion')">Actualizar</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="config-section">
+                                <h4><i class="fas fa-sliders-h"></i> Configuración de Tarifas</h4>
+                                <div class="parametros-list">
+                                    <div class="parametro-item">
+                                        <div class="parametro-info">
+                                            <span class="parametro-label">Tarifa mínima de agua:</span>
+                                            <span class="parametro-desc">Monto mínimo a cobrar por consumo de agua</span>
+                                        </div>
+                                        <div class="parametro-control">
+                                            <input type="number" id="tarifaMinimaAgua" class="form-input" min="0" step="100" value="5000">
+                                            <button class="btn btn-primary btn-sm" onclick="actualizarParametro('tarifaMinimaAgua')">Actualizar</button>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="parametro-item">
+                                        <div class="parametro-info">
+                                            <span class="parametro-label">M3 para tarifa mínima de agua:</span>
+                                            <span class="parametro-desc">Consumo máximo para aplicar tarifa mínima</span>
+                                        </div>
+                                        <div class="parametro-control">
+                                            <input type="number" id="m3TarifaMinima" class="form-input" min="1" max="100" value="30">
+                                            <button class="btn btn-primary btn-sm" onclick="actualizarParametro('m3TarifaMinima')">Actualizar</button>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="parametro-item">
+                                        <div class="parametro-info">
+                                            <span class="parametro-label">Costo por M3 adicional:</span>
+                                            <span class="parametro-desc">Precio por cada M3 sobre el consumo mínimo</span>
+                                        </div>
+                                        <div class="parametro-control">
+                                            <input type="number" id="costoM3Adicional" class="form-input" min="0" step="100" value="1000">
+                                            <button class="btn btn-primary btn-sm" onclick="actualizarParametro('costoM3Adicional')">Actualizar</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="config-section">
+                                <h4><i class="fas fa-users-cog"></i> Gestión de Usuarios</h4>
+                                <div class="search-container">
+                                    <input type="text" id="buscarUsuario" placeholder="Buscar usuario por nombre o documento">
+                                    <button class="btn btn-primary" onclick="buscarUsuarios()">
+                                        <i class="fas fa-search"></i> Buscar
+                                    </button>
+                                </div>
+                                <div id="resultadosUsuarios" style="margin-top: 15px;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="src.js">
+        
+    </script>
+</body>
+</html>
