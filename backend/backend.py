@@ -561,3 +561,159 @@ def verificarSesion():
             })
     except Exception as error:
         return jsonify({'success': False, 'message': str(error)}), 500
+
+@app.route('/api/procesarCambioValorPropiedad', methods=['POST'])
+def procesarCambioValorPropiedad():
+    try:
+        if 'userName' not in session:
+            return jsonify({'success': False, 'message': 'No autenticado'}), 401
+        
+        datos = request.get_json()
+        numFinca = datos.get('numFinca')
+        nuevoValor = datos.get('nuevoValor')
+        
+        if not numFinca or not nuevoValor:
+            return jsonify({'success': False, 'message': 'Finca y nuevo valor requeridos'}), 400
+        
+        parametros = {
+            'inNumFinca': numFinca,
+            'inNuevoValor': nuevoValor,
+            'inUserName': session['userName'],
+            'inIP': session.get('ip', request.remote_addr)
+        }
+        
+        resultado, outResultCode = ejecutarSpConResultado('XMLProcesarPropiedadCambioValor', parametros)
+        
+        if outResultCode == 0:
+            return jsonify({
+                'success': True,
+                'message': 'Valor de propiedad actualizado exitosamente'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': 'Error al actualizar valor de propiedad'
+            }), 400
+            
+    except Exception as error:
+        return jsonify({'success': False, 'message': str(error)}), 500
+
+@app.route('/api/procesarLecturaMedidor', methods=['POST'])
+def procesarLecturaMedidor():
+    try:
+        if 'userName' not in session:
+            return jsonify({'success': False, 'message': 'No autenticado'}), 401
+        
+        datos = request.get_json()
+        numeroMedidor = datos.get('numeroMedidor')
+        tipoMovimiento = datos.get('tipoMovimiento')
+        valor = datos.get('valor')
+        
+        if not numeroMedidor or not tipoMovimiento or not valor:
+            return jsonify({'success': False, 'message': 'Todos los campos son requeridos'}), 400
+        
+        parametros = {
+            'inNumeroMedidor': numeroMedidor,
+            'inTipoMovimiento': tipoMovimiento,
+            'inValor': valor,
+            'inUserName': session['userName'],
+            'inIP': session.get('ip', request.remote_addr)
+        }
+        
+        resultado, outResultCode = ejecutarSpConResultado('XMLProcesarLecturasMedidor', parametros)
+        
+        if outResultCode == 0:
+            return jsonify({
+                'success': True,
+                'message': 'Lectura de medidor procesada exitosamente'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': 'Error al procesar lectura de medidor'
+            }), 400
+            
+    except Exception as error:
+        return jsonify({'success': False, 'message': str(error)}), 500
+
+@app.route('/api/procesarCcPropiedad', methods=['POST'])
+def procesarCcPropiedad():
+    try:
+        if 'userName' not in session or not session.get('esAdmin'):
+            return jsonify({'success': False, 'message': 'No autorizado'}), 403
+        
+        datos = request.get_json()
+        numFinca = datos.get('numFinca')
+        idCc = datos.get('idCc')
+        tipoAsociacion = datos.get('tipoAsociacion')
+        
+        if not numFinca or not idCc or not tipoAsociacion:
+            return jsonify({'success': False, 'message': 'Todos los campos son requeridos'}), 400
+        
+        parametros = {
+            'inNumFinca': numFinca,
+            'inIdCc': idCc,
+            'inTipoAsociacion': tipoAsociacion,
+            'inUserName': session['userName'],
+            'inIP': session.get('ip', request.remote_addr)
+        }
+        
+        resultado, outResultCode = ejecutarSpConResultado('XMLProcesarCCPropiedad', parametros)
+        
+        if outResultCode == 0:
+            return jsonify({
+                'success': True,
+                'message': 'Concepto de cobro procesado exitosamente'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': 'Error al procesar concepto de cobro'
+            }), 400
+            
+    except Exception as error:
+        return jsonify({'success': False, 'message': str(error)}), 500
+
+@app.route('/api/ejecutarProcesosMasivos', methods=['POST'])
+def ejecutarProcesosMasivos():
+    try:
+        if 'userName' not in session or not session.get('esAdmin'):
+            return jsonify({'success': False, 'message': 'No autorizado'}), 403
+        
+        datos = request.get_json()
+        proceso = datos.get('proceso')
+        fechaOperacion = datos.get('fechaOperacion', datetime.now().date().isoformat())
+        
+        if not proceso:
+            return jsonify({'success': False, 'message': 'Proceso requerido'}), 400
+        
+        mapaSp = {
+            'generarFacturas': 'MasivoGenerarFacturasDelDia',
+            'generarCortes': 'MasivoGenerarCortes',
+            'generarReconexiones': 'MasivoGenerarReconexiones'
+        }
+        
+        if proceso not in mapaSp:
+            return jsonify({'success': False, 'message': 'Proceso no válido'}), 400
+        
+        parametros = {
+            'inFechaOperacion': fechaOperacion,
+            'inUserName': session['userName'],
+            'inIP': session.get('ip', request.remote_addr)
+        }
+        
+        resultado, outResultCode = ejecutarSpConResultado(mapaSp[proceso], parametros)
+        
+        if outResultCode == 0:
+            return jsonify({
+                'success': True,
+                'message': f'Proceso {proceso} ejecutado exitosamente'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': f'Error al ejecutar proceso {proceso}'
+            }), 400
+            
+    except Exception as error:
+        return jsonify({'success': False, 'message': str(error)}), 500
