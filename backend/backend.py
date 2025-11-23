@@ -674,46 +674,109 @@ def procesarCcPropiedad():
     except Exception as error:
         return jsonify({'success': False, 'message': str(error)}), 500
 
-@app.route('/api/ejecutarProcesosMasivos', methods=['POST'])
-def ejecutarProcesosMasivos():
+@app.route('/api/procesarPago', methods=['POST'])
+def procesarPago():
     try:
-        if 'userName' not in session or not session.get('esAdmin'):
-            return jsonify({'success': False, 'message': 'No autorizado'}), 403
+        if 'userName' not in session:
+            return jsonify({'success': False, 'message': 'No autenticado'}), 401
         
         datos = request.get_json()
-        proceso = datos.get('proceso')
-        fechaOperacion = datos.get('fechaOperacion', datetime.now().date().isoformat())
+        numFinca = datos.get('numFinca')
+        tipoMedioPago = datos.get('tipoMedioPago', 1)
+        numeroComprobante = datos.get('numeroComprobante')
         
-        if not proceso:
-            return jsonify({'success': False, 'message': 'Proceso requerido'}), 400
-        
-        mapaSp = {
-            'generarFacturas': 'MasivoGenerarFacturasDelDia',
-            'generarCortes': 'MasivoGenerarCortes',
-            'generarReconexiones': 'MasivoGenerarReconexiones'
-        }
-        
-        if proceso not in mapaSp:
-            return jsonify({'success': False, 'message': 'Proceso no válido'}), 400
+        if not numFinca or not numeroComprobante:
+            return jsonify({'success': False, 'message': 'Finca y número de comprobante requeridos'}), 400
         
         parametros = {
-            'inFechaOperacion': fechaOperacion,
+            'inNumFinca': numFinca,
+            'inTipoMedioPago': tipoMedioPago,
+            'inNumeroComprobante': numeroComprobante,
             'inUserName': session['userName'],
             'inIP': session.get('ip', request.remote_addr)
         }
         
-        resultado, outResultCode = ejecutarSpConResultado(mapaSp[proceso], parametros)
+        resultado, outResultCode = ejecutarSpConResultado('XMLProcesarPagos', parametros)
         
         if outResultCode == 0:
             return jsonify({
                 'success': True,
-                'message': f'Proceso {proceso} ejecutado exitosamente'
+                'message': 'Pago procesado exitosamente'
             })
         else:
             return jsonify({
                 'success': False,
-                'message': f'Error al ejecutar proceso {proceso}'
+                'message': 'Error al procesar pago'
             }), 400
             
     except Exception as error:
         return jsonify({'success': False, 'message': str(error)}), 500
+
+@app.route('/api/obtenerDescripcionError', methods=['POST'])
+def obtenerDescripcionError():
+    try:
+        datos = request.get_json()
+        codigoError = datos.get('codigoError')
+        
+        if not codigoError:
+            return jsonify({'success': False, 'message': 'Código de error requerido'}), 400
+        
+        parametros = {
+            'inCodigo': codigoError
+        }
+        
+        resultado, outResultCode = ejecutarSpConResultado('ObtenerDescripcionError', parametros)
+        
+        if outResultCode == 0 and resultado:
+            descripcion = resultado[0].get('Descripcion', 'Error desconocido')
+            return jsonify({
+                'success': True,
+                'descripcion': descripcion,
+                'message': 'Descripción obtenida exitosamente'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': 'Error al obtener descripción'
+            }), 400
+            
+    except Exception as error:
+        return jsonify({'success': False, 'message': str(error)}), 500
+
+@app.route('/api/listarFacturasPendientes', methods=['POST'])
+def listarFacturasPendientes():
+    try:
+        if 'userName' not in session:
+            return jsonify({'success': False, 'message': 'No autenticado'}), 401
+        
+        datos = request.get_json()
+        idPropiedad = datos.get('idPropiedad')
+        
+        if not idPropiedad:
+            return jsonify({'success': False, 'message': 'ID de propiedad requerido'}), 400
+        
+        parametros = {
+            'inIDPropiedad': idPropiedad,
+            'inUserName': session['userName'],
+            'inIP': session.get('ip', request.remote_addr)
+        }
+        
+        resultado, outResultCode = ejecutarSpConResultado('ListarFacturasPendientes', parametros)
+        
+        if outResultCode == 0:
+            return jsonify({
+                'success': True,
+                'facturas': resultado,
+                'message': 'Facturas pendientes obtenidas exitosamente'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': 'No se pudieron obtener las facturas pendientes'
+            }), 400
+            
+    except Exception as error:
+        return jsonify({'success': False, 'message': str(error)}), 500
+
+if __name__ == '__main__':
+    app.run(host="0.0.0.0", port=5000, debug=True)
