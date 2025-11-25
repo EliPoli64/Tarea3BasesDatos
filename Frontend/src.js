@@ -991,7 +991,7 @@ window.buscarUsuarios = async function() {
                                 <i class="fas fa-user"></i>
                             </div>
                             <div class="invoice-details">
-                                <div class="invoice-number">${usuario.UserName}</div>
+                                <div class="invoice-number">${usuario.Nombre}</div>
                                 <div class="invoice-date">${usuario.ValorDocumentoId} • ${usuario.EsActivo ? 'Activo' : 'Inactivo'}</div>
                             </div>
                             <div class="invoice-actions">
