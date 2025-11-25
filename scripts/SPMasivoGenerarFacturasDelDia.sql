@@ -16,9 +16,6 @@ BEGIN
     SET @descripcionEvento = 'Exito: Facturas del día generadas - Fecha: ' + CAST(@inFechaOperacion AS VARCHAR);
 
     BEGIN TRY
-        BEGIN TRANSACTION;
-
-        -- Obtener parámetros del sistema
         SELECT @diasVencimiento = CAST(Valor AS INT) 
         FROM dbo.ParametrosSistema 
         WHERE Nombre = 'DiasVencimientoFactura';
@@ -34,8 +31,6 @@ BEGIN
             GOTO FinFacturas;
         END;
 
-        -- Identificar propiedades que deben generar factura hoy
-        -- (según el día de su fecha de registro) y que NO tengan factura pendiente del mismo día
         DECLARE @PropiedadesFacturar TABLE (
             IDPropiedad INT PRIMARY KEY,
             NumFinca VARCHAR(16),
@@ -79,13 +74,14 @@ BEGIN
               AND F.FechaFactura = @inFechaOperacion
           );
 
-        -- Verificar si hay propiedades para facturar
         IF NOT EXISTS (SELECT 1 FROM @PropiedadesFacturar)
         BEGIN
-            SET @outResultCode = 50012; -- Sin cambios
+            SET @outResultCode = 50012;
             SET @descripcionEvento = 'Sin cambios: No hay propiedades para facturar en la fecha ' + CAST(@inFechaOperacion AS VARCHAR);
             GOTO FinFacturas;
         END;
+
+        BEGIN TRANSACTION;
 
         INSERT INTO dbo.Factura (
             FechaFactura, 
@@ -102,13 +98,12 @@ BEGIN
             DATEADD(DAY, @diasVencimiento, @inFechaOperacion),
             DATEADD(DAY, @diasCorteAgua, @inFechaOperacion),
             PF.IDPropiedad,
-            0, -- Total temporal
-            0, -- Estado pendiente
-            1, -- Medio de pago por defecto
-            0  -- Total final temporal
+            0,
+            0,
+            1,
+            0
         FROM @PropiedadesFacturar PF;
 
-        -- Calcular montos para cada concepto de cobro y crear líneas de factura
         DECLARE @FacturasRecienCreadas TABLE (
             IDFactura INT PRIMARY KEY,
             IDPropiedad INT,
@@ -147,20 +142,17 @@ BEGIN
         WHERE F.FechaFactura = @inFechaOperacion
           AND F.EstadoFactura = 0;
 
-        -- Procesar cada concepto de cobro según los requisitos
         DECLARE @LineasFactura TABLE (
             IDFactura INT,
             IDCC INT,
             Monto MONEY
         );
 
-        -- 1. Impuesto sobre la propiedad (SIEMPRE - CC ID 2 según PDF)
-        -- Verificar si la propiedad tiene este CC activo
         INSERT INTO @LineasFactura (IDFactura, IDCC, Monto)
         SELECT 
             FRC.IDFactura,
-            2, -- Impuesto sobre propiedad
-            (FRC.ValorPropiedad * 0.01) / 12 -- 1% anual, dividido en 12 meses
+            2,
+            (FRC.ValorPropiedad * 0.01) / 12
         FROM @FacturasRecienCreadas FRC
         WHERE EXISTS (
             SELECT 1 
@@ -170,18 +162,17 @@ BEGIN
               AND PXC.Activo = 1
         );
 
-        -- 2. Consumo de agua (SOLO para uso residencial, industrial o comercial - CC ID 1)
         INSERT INTO @LineasFactura (IDFactura, IDCC, Monto)
         SELECT 
             FRC.IDFactura,
-            1, -- Consumo de agua
+            1,
             CASE 
-                WHEN (FRC.SaldoM3 - FRC.SaldoM3UltimaFactura) <= 30 THEN 5000 -- Tarifa mínima
-                ELSE 5000 + ((FRC.SaldoM3 - FRC.SaldoM3UltimaFactura - 30) * 1000) -- + 1000 por cada m3 adicional
+                WHEN (FRC.SaldoM3 - FRC.SaldoM3UltimaFactura) <= 30 THEN 5000
+                ELSE 5000 + ((FRC.SaldoM3 - FRC.SaldoM3UltimaFactura - 30) * 1000)
             END
         FROM @FacturasRecienCreadas FRC
         INNER JOIN dbo.TipoUsoPropiedad TUP ON FRC.IDTipoUso = TUP.ID
-        WHERE TUP.Nombre IN ('habitación', 'comercial', 'industrial') -- Residencial, comercial o industrial
+        WHERE TUP.Nombre IN ('habitación', 'comercial', 'industrial')
           AND EXISTS (
             SELECT 1 
             FROM dbo.PropiedadXCC PXC 
@@ -190,11 +181,10 @@ BEGIN
               AND PXC.Activo = 1
         );
 
-        -- 3. Recolección de basura (SOLO para áreas NO agrícolas - CC ID 3)
         INSERT INTO @LineasFactura (IDFactura, IDCC, Monto)
         SELECT 
             FRC.IDFactura,
-            3, -- Recolección de basura
+            3,
             CASE 
                 WHEN FRC.Area <= 400 THEN 150
                 ELSE 150 + (CEILING((FRC.Area - 400) / 200.0) * 75)
@@ -210,12 +200,11 @@ BEGIN
               AND PXC.Activo = 1
         );
 
-        -- 4. Mantenimiento de parques
         INSERT INTO @LineasFactura (IDFactura, IDCC, Monto)
         SELECT 
             FRC.IDFactura,
-            7, -- Mantenimiento de parques
-            2000 / 12 -- 2000 anual, dividido en 12 meses
+            7,
+            2000 / 12
         FROM @FacturasRecienCreadas FRC
         INNER JOIN dbo.TipoAreaPropiedad TAP ON FRC.IDTipoArea = TAP.ID
         WHERE TAP.Nombre IN ('residencial', 'comercial')
@@ -227,12 +216,11 @@ BEGIN
               AND PXC.Activo = 1
         );
 
-        -- 5. Patente comercial
         INSERT INTO @LineasFactura (IDFactura, IDCC, Monto)
         SELECT 
             FRC.IDFactura,
-            4, -- Patente comercial
-            150000 / 6 -- 150,000 semestral, dividido en 6 meses
+            4,
+            150000 / 6
         FROM @FacturasRecienCreadas FRC
         WHERE EXISTS (
             SELECT 1 
@@ -242,12 +230,10 @@ BEGIN
               AND PXC.Activo = 1
         );
 
-        -- Insertar las líneas en la tabla Linea
         INSERT INTO dbo.Linea (Monto, IDFactura, IDCC)
         SELECT Monto, IDFactura, IDCC
         FROM @LineasFactura;
 
-        -- Actualizar los totales de las facturas
         UPDATE F
         SET 
             TotalPagarOriginal = ISNULL(LF.TotalMonto, 0),
@@ -261,7 +247,6 @@ BEGIN
         WHERE F.FechaFactura = @inFechaOperacion
           AND F.EstadoFactura = 0;
 
-        -- Actualizar el saldo de M3 para la próxima facturación para propiedades con CC de agua
         UPDATE P
         SET SaldoM3UltimaFactura = P.SaldoM3
         FROM dbo.Propiedad P
@@ -274,20 +259,16 @@ BEGIN
               AND PXC.Activo = 1
         );
 
-        -- Contar facturas generadas
         DECLARE @cantidadFacturas INT = (SELECT COUNT(*) FROM @FacturasRecienCreadas);
         SET @descripcionEvento = 'Éxito: ' + CAST(@cantidadFacturas AS VARCHAR) + 
                                 ' facturas generadas - Fecha: ' + CAST(@inFechaOperacion AS VARCHAR);
+
+        COMMIT TRANSACTION;
 
 FinFacturas:
         IF (@outResultCode != 0)
         BEGIN
             SET @tipoEvento = 11;
-            ROLLBACK TRANSACTION;
-        END
-        ELSE
-        BEGIN
-            COMMIT TRANSACTION;
         END;
 
         EXEC dbo.InsertarBitacora 
@@ -303,26 +284,25 @@ FinFacturas:
 
         SET @outResultCode = 50008;
         
-        
-		INSERT INTO dbo.DBError (
-			[UserName]
-			, [Number]
-			, [State]
-			, [Severity]
-			, [Line]
-			, [Procedure]
-			, [Message]
-			, [DateTime]
-		) VALUES (
-			SUSER_SNAME()
-			, ERROR_NUMBER()
-			, ERROR_STATE()
-			, ERROR_SEVERITY()
-			, ERROR_LINE()
-			, ERROR_PROCEDURE()
-			, ERROR_MESSAGE()
-			, GETDATE()
-		);
+        INSERT INTO dbo.DBError (
+            [UserName]
+            , [Number]
+            , [State]
+            , [Severity]
+            , [Line]
+            , [Procedure]
+            , [Message]
+            , [DateTime]
+        ) VALUES (
+            SUSER_SNAME()
+            , ERROR_NUMBER()
+            , ERROR_STATE()
+            , ERROR_SEVERITY()
+            , ERROR_LINE()
+            , ERROR_PROCEDURE()
+            , ERROR_MESSAGE()
+            , GETDATE()
+        );
 
         SET @descripcionEvento = 'Error inesperado al generar facturas del día: ' + ERROR_MESSAGE();
         SET @tipoEvento = 11;
@@ -336,4 +316,3 @@ FinFacturas:
     
     SET NOCOUNT OFF;
 END;
-GO

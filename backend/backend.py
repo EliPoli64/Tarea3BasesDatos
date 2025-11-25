@@ -1,4 +1,4 @@
-from datetime import datetime, time, date
+from datetime import datetime, time, date, timedelta
 from flask import Flask, jsonify, request, session
 from flask_cors import CORS
 import pyodbc
@@ -7,6 +7,10 @@ connectionString = "DRIVER={ODBC Driver 17 for SQL Server};SERVER=25.38.209.9,14
 
 app = Flask(__name__)
 CORS(app, supports_credentials=True)
+
+@app.before_request
+def make_session_permanent():
+    session.permanent = True
 
 app.secret_key = 'claveSecreta1234'
 
@@ -178,6 +182,8 @@ def login():
             session['userName'] = userName
             session['esAdmin'] = resultado[0].get('esAdmin', False)
             session['ip'] = ip
+            print(session.keys())
+            print(session['userName'])
             
             return jsonify({
                 'success': True,
@@ -205,8 +211,6 @@ def logout():
 @app.route('/api/buscarPropiedadesPorFinca', methods=['POST'])
 def buscarPropiedadesPorFinca():
     try:
-        if 'userName' not in session:
-            return jsonify({'success': False, 'message': 'No autenticado'}), 401
         
         datos = request.get_json()
         numFinca = datos.get('numFinca')
@@ -216,8 +220,8 @@ def buscarPropiedadesPorFinca():
         
         parametros = {
             'inNumFinca': numFinca,
-            'inUserName': session['userName'],
-            'inIP': session.get('ip', request.remote_addr)
+            'inUserName': 'elipoli',
+            'inIP': '25.38.209.9'
         }
         
         resultado, outResultCode = ejecutarSpConResultado('BuscarPropiedadesPorFinca', parametros)
@@ -240,8 +244,6 @@ def buscarPropiedadesPorFinca():
 @app.route('/api/adminListarFincasPorDocumento', methods=['POST'])
 def adminListarFincasPorDocumento():
     try:
-        if 'userName' not in session or not session.get('esAdmin'):
-            return jsonify({'success': False, 'message': 'No autorizado'}), 403
         
         datos = request.get_json()
         valorDocumento = datos.get('valorDocumento')
@@ -251,8 +253,8 @@ def adminListarFincasPorDocumento():
         
         parametros = {
             'inValorDocumento': valorDocumento,
-            'inUserName': session['userName'],
-            'inIP': session.get('ip', request.remote_addr)
+            'inUserName': 'elipoli',
+            'inIP': '25.38.209.9'
         }
         
         resultado, outResultCode = ejecutarSpConResultado('AdminListarFincasPorDocumento', parametros)
@@ -275,8 +277,6 @@ def adminListarFincasPorDocumento():
 @app.route('/api/facturaObtenerPendienteMasAntigua', methods=['POST'])
 def facturaObtenerPendienteMasAntigua():
     try:
-        if 'userName' not in session:
-            return jsonify({'success': False, 'message': 'No autenticado'}), 401
         
         datos = request.get_json()
         idPropiedad = datos.get('idPropiedad')
@@ -286,8 +286,8 @@ def facturaObtenerPendienteMasAntigua():
         
         parametros = {
             'inIDPropiedad': idPropiedad,
-            'inUserName': session['userName'],
-            'inIP': session.get('ip', request.remote_addr)
+            'inUserName': 'elipoli',
+            'inIP': '25.38.209.9'
         }
         
         resultado, outResultCode = ejecutarSpConResultado('FacturaObtenerPendienteMasAntigua', parametros)
@@ -310,8 +310,6 @@ def facturaObtenerPendienteMasAntigua():
 @app.route('/api/previewFacturaMasAntigua', methods=['POST'])
 def previewFacturaMasAntigua():
     try:
-        if 'userName' not in session:
-            return jsonify({'success': False, 'message': 'No autenticado'}), 401
         
         datos = request.get_json()
         idPropiedad = datos.get('idPropiedad')
@@ -347,7 +345,7 @@ def previewFacturaMasAntigua():
                 @outMontoMoratorios as MontoMoratorios,
                 @outTotalPagar as TotalPagar,
                 @outResultCode as ResultCode;
-        """, idPropiedad, session['userName'], session.get('ip', request.remote_addr))
+        """, idPropiedad, 'elipoli', '25.38.209.9')
         
         resultado_sp = cursor.fetchone()
         if resultado_sp:
@@ -415,8 +413,6 @@ def previewFacturaMasAntigua():
 @app.route('/api/confirmarFacturaMasAntigua', methods=['POST'])
 def confirmarFacturaMasAntigua():
     try:
-        if 'userName' not in session:
-            return jsonify({'success': False, 'message': 'No autenticado'}), 401
         
         datos = request.get_json()
         idFactura = datos.get('idFactura')
@@ -446,7 +442,7 @@ def confirmarFacturaMasAntigua():
             SELECT 
                 @outCodigoComprobante as CodigoComprobante,
                 @outResultCode as ResultCode;
-        """, idFactura, tipoMedioPago, session['userName'], session.get('ip', request.remote_addr))
+        """, idFactura, tipoMedioPago, 'elipoli', '25.38.209.9')
 
         resultado = cursor.fetchone()
         if resultado:
@@ -483,9 +479,7 @@ def confirmarFacturaMasAntigua():
 @app.route('/api/dashboard', methods=['GET'])
 def obtenerDashboard():
     try:
-        if 'userName' not in session:
-            return jsonify({'success': False, 'message': 'No autenticado'}), 401
-
+            
         conexion = pyodbc.connect(connectionString)
         cursor = conexion.cursor()
 
@@ -513,7 +507,7 @@ def obtenerDashboard():
                 @outRecaudacionMes as RecaudacionMes,
                 @outCortesProgramados as CortesProgramados,
                 @outResultCode as ResultCode;
-        """, session['userName'], session.get('ip', request.remote_addr))
+        """, 'elipoli', '25.38.209.9')
 
         resultado = cursor.fetchone()
         if resultado:
@@ -565,8 +559,6 @@ def verificarSesion():
 @app.route('/api/procesarCambioValorPropiedad', methods=['POST'])
 def procesarCambioValorPropiedad():
     try:
-        if 'userName' not in session:
-            return jsonify({'success': False, 'message': 'No autenticado'}), 401
         
         datos = request.get_json()
         numFinca = datos.get('numFinca')
@@ -578,8 +570,8 @@ def procesarCambioValorPropiedad():
         parametros = {
             'inNumFinca': numFinca,
             'inNuevoValor': nuevoValor,
-            'inUserName': session['userName'],
-            'inIP': session.get('ip', request.remote_addr)
+            'inUserName': 'elipoli',
+            'inIP': '25.38.209.9'
         }
         
         resultado, outResultCode = ejecutarSpConResultado('XMLProcesarPropiedadCambioValor', parametros)
@@ -601,8 +593,6 @@ def procesarCambioValorPropiedad():
 @app.route('/api/procesarLecturaMedidor', methods=['POST'])
 def procesarLecturaMedidor():
     try:
-        if 'userName' not in session:
-            return jsonify({'success': False, 'message': 'No autenticado'}), 401
         
         datos = request.get_json()
         numeroMedidor = datos.get('numeroMedidor')
@@ -616,8 +606,8 @@ def procesarLecturaMedidor():
             'inNumeroMedidor': numeroMedidor,
             'inTipoMovimiento': tipoMovimiento,
             'inValor': valor,
-            'inUserName': session['userName'],
-            'inIP': session.get('ip', request.remote_addr)
+            'inUserName': 'elipoli',
+            'inIP': '25.38.209.9'
         }
         
         resultado, outResultCode = ejecutarSpConResultado('XMLProcesarLecturasMedidor', parametros)
@@ -639,8 +629,6 @@ def procesarLecturaMedidor():
 @app.route('/api/procesarCcPropiedad', methods=['POST'])
 def procesarCcPropiedad():
     try:
-        if 'userName' not in session or not session.get('esAdmin'):
-            return jsonify({'success': False, 'message': 'No autorizado'}), 403
         
         datos = request.get_json()
         numFinca = datos.get('numFinca')
@@ -654,8 +642,8 @@ def procesarCcPropiedad():
             'inNumFinca': numFinca,
             'inIdCc': idCc,
             'inTipoAsociacion': tipoAsociacion,
-            'inUserName': session['userName'],
-            'inIP': session.get('ip', request.remote_addr)
+            'inUserName': 'elipoli',
+            'inIP': '25.38.209.9'
         }
         
         resultado, outResultCode = ejecutarSpConResultado('XMLProcesarCCPropiedad', parametros)
@@ -674,11 +662,51 @@ def procesarCcPropiedad():
     except Exception as error:
         return jsonify({'success': False, 'message': str(error)}), 500
 
+@app.route('/api/ejecutarProcesosMasivos', methods=['POST'])
+def ejecutarProcesosMasivos():
+    try:
+        
+        datos = request.get_json()
+        proceso = datos.get('proceso')
+        fechaOperacion = datos.get('fechaOperacion', datetime.now().date().isoformat())
+        
+        if not proceso:
+            return jsonify({'success': False, 'message': 'Proceso requerido'}), 400
+        
+        mapaSp = {
+            'generarFacturas': 'MasivoGenerarFacturasDelDia',
+            'generarCortes': 'MasivoGenerarCortes',
+            'generarReconexiones': 'MasivoGenerarReconexiones'
+        }
+        
+        if proceso not in mapaSp:
+            return jsonify({'success': False, 'message': 'Proceso no válido'}), 400
+        
+        parametros = {
+            'inFechaOperacion': fechaOperacion,
+            'inUserName': 'elipoli',
+            'inIP': '25.38.209.9'
+        }
+        
+        resultado, outResultCode = ejecutarSpConResultado(mapaSp[proceso], parametros)
+        
+        if outResultCode == 0:
+            return jsonify({
+                'success': True,
+                'message': f'Proceso {proceso} ejecutado exitosamente'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': f'Error al ejecutar proceso {proceso}'
+            }), 400
+            
+    except Exception as error:
+        return jsonify({'success': False, 'message': str(error)}), 500
+
 @app.route('/api/procesarPago', methods=['POST'])
 def procesarPago():
     try:
-        if 'userName' not in session:
-            return jsonify({'success': False, 'message': 'No autenticado'}), 401
         
         datos = request.get_json()
         numFinca = datos.get('numFinca')
@@ -692,8 +720,8 @@ def procesarPago():
             'inNumFinca': numFinca,
             'inTipoMedioPago': tipoMedioPago,
             'inNumeroComprobante': numeroComprobante,
-            'inUserName': session['userName'],
-            'inIP': session.get('ip', request.remote_addr)
+            'inUserName': 'elipoli',
+            'inIP': '25.38.209.9'
         }
         
         resultado, outResultCode = ejecutarSpConResultado('XMLProcesarPagos', parametros)
@@ -746,8 +774,6 @@ def obtenerDescripcionError():
 @app.route('/api/listarFacturasPendientes', methods=['POST'])
 def listarFacturasPendientes():
     try:
-        if 'userName' not in session:
-            return jsonify({'success': False, 'message': 'No autenticado'}), 401
         
         datos = request.get_json()
         idPropiedad = datos.get('idPropiedad')
@@ -757,8 +783,8 @@ def listarFacturasPendientes():
         
         parametros = {
             'inIDPropiedad': idPropiedad,
-            'inUserName': session['userName'],
-            'inIP': session.get('ip', request.remote_addr)
+            'inUserName': 'elipoli',
+            'inIP': '25.38.209.9'
         }
         
         resultado, outResultCode = ejecutarSpConResultado('ListarFacturasPendientes', parametros)
@@ -774,6 +800,365 @@ def listarFacturasPendientes():
                 'success': False,
                 'message': 'No se pudieron obtener las facturas pendientes'
             }), 400
+            
+    except Exception as error:
+        return jsonify({'success': False, 'message': str(error)}), 500
+
+@app.route('/api/reportes/facturasPendientes', methods=['POST'])
+def reporteFacturasPendientes():
+    try:
+        
+        datos = request.get_json()
+        fechaInicio = datos.get('fechaInicio')
+        fechaFin = datos.get('fechaFin')
+        
+        if not fechaInicio or not fechaFin:
+            return jsonify({'success': False, 'message': 'Fechas requeridas'}), 400
+        
+        parametros = {
+            'inFechaInicio': fechaInicio,
+            'inFechaFin': fechaFin,
+            'inUserName': 'elipoli',
+            'inIP': '25.38.209.9'
+        }
+        
+        resultado, outResultCode = ejecutarSpConResultado('ReporteFacturasPendientes', parametros)
+        
+        if outResultCode == 0:
+            return jsonify({
+                'success': True,
+                'reporte': resultado,
+                'message': 'Reporte generado exitosamente'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': 'Error al generar reporte'
+            }), 400
+            
+    except Exception as error:
+        return jsonify({'success': False, 'message': str(error)}), 500
+
+@app.route('/api/reportes/recaudacionCC', methods=['POST'])
+def reporteRecaudacionCC():
+    try:
+        
+        datos = request.get_json()
+        fechaInicio = datos.get('fechaInicio')
+        fechaFin = datos.get('fechaFin')
+        
+        if not fechaInicio or not fechaFin:
+            return jsonify({'success': False, 'message': 'Fechas requeridas'}), 400
+        
+        parametros = {
+            'inFechaInicio': fechaInicio,
+            'inFechaFin': fechaFin,
+            'inUserName': 'elipoli',
+            'inIP': '25.38.209.9'
+        }
+        
+        resultado, outResultCode = ejecutarSpConResultado('ReporteRecaudacionPorCC', parametros)
+        
+        if outResultCode == 0:
+            return jsonify({
+                'success': True,
+                'reporte': resultado,
+                'message': 'Reporte generado exitosamente'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': 'Error al generar reporte'
+            }), 400
+            
+    except Exception as error:
+        return jsonify({'success': False, 'message': str(error)}), 500
+
+@app.route('/api/reportes/propiedadesMorosas', methods=['GET'])
+def reportePropiedadesMorosas():
+    try:
+        
+        parametros = {
+            'inUserName': 'elipoli',
+            'inIP': '25.38.209.9'
+        }
+        
+        resultado, outResultCode = ejecutarSpConResultado('ReportePropiedadesMorosas', parametros)
+        
+        if outResultCode == 0:
+            return jsonify({
+                'success': True,
+                'reporte': resultado,
+                'message': 'Reporte generado exitosamente'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': 'Error al generar reporte'
+            }), 400
+            
+    except Exception as error:
+        return jsonify({'success': False, 'message': str(error)}), 500
+
+@app.route('/api/reportes/consumoAgua', methods=['POST'])
+def reporteConsumoAgua():
+    print("lsndlknmsd")
+    try:
+        
+        datos = request.get_json()
+        print(datos)
+        fechaInicio = datos.get('fechaInicio')
+        fechaFin = datos.get('fechaFin')
+        
+        if not fechaInicio or not fechaFin:
+            return jsonify({'success': False, 'message': 'Fechas requeridas'}), 400
+        print(fechaFin, fechaInicio)
+        
+        parametros = {
+            'inFechaInicio': fechaInicio,
+            'inFechaFin': fechaFin,
+            'inUserName': 'elipoli',
+            'inIP': '25.38.209.9'
+        }
+        
+        resultado, outResultCode = ejecutarSpConResultado('ReporteConsumoAgua', parametros)
+        
+        if outResultCode == 0:
+            return jsonify({
+                'success': True,
+                'reporte': resultado,
+                'message': 'Reporte generado exitosamente'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': 'Error al generar reporte'
+            }), 400
+            
+    except Exception as error:
+        return jsonify({'success': False, 'message': str(error)}), 500
+
+@app.route('/api/reportes/cortesReconexiones', methods=['POST'])
+def reporteCortesReconexiones():
+    try:
+        
+        datos = request.get_json()
+        fechaInicio = datos.get('fechaInicio')
+        fechaFin = datos.get('fechaFin')
+        
+        if not fechaInicio or not fechaFin:
+            return jsonify({'success': False, 'message': 'Fechas requeridas'}), 400
+        
+        parametros = {
+            'inFechaInicio': fechaInicio,
+            'inFechaFin': fechaFin,
+            'inUserName': 'elipoli',
+            'inIP': '25.38.209.9'
+        }
+        
+        resultado, outResultCode = ejecutarSpConResultado('ReporteCortesReconexiones', parametros)
+        
+        if outResultCode == 0:
+            return jsonify({
+                'success': True,
+                'reporte': resultado,
+                'message': 'Reporte generado exitosamente'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': 'Error al generar reporte'
+            }), 400
+            
+    except Exception as error:
+        return jsonify({'success': False, 'message': str(error)}), 500
+
+@app.route('/api/reportes/estadisticasPagos', methods=['POST'])
+def reporteEstadisticasPagos():
+    try:
+        
+        datos = request.get_json()
+        meses = datos.get('meses', 12)
+        
+        parametros = {
+            'inMeses': meses,
+            'inUserName': 'elipoli',
+            'inIP': '25.38.209.9'
+        }
+        
+        resultado, outResultCode = ejecutarSpConResultado('ReporteEstadisticasPagos', parametros)
+        
+        if outResultCode == 0:
+            return jsonify({
+                'success': True,
+                'reporte': resultado,
+                'message': 'Reporte generado exitosamente'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': 'Error al generar reporte'
+            }), 400
+            
+    except Exception as error:
+        return jsonify({'success': False, 'message': str(error)}), 500
+
+@app.route('/api/configuracion/obtenerParametros', methods=['GET'])
+def obtenerParametros():
+    try:
+        
+        parametros = {
+            'inUserName': 'elipoli',
+            'inIP': '25.38.209.9'
+        }
+        
+        resultado, outResultCode = ejecutarSpConResultado('ConfiguracionObtenerParametros', parametros)
+        
+        if outResultCode == 0:
+            return jsonify({
+                'success': True,
+                'parametros': resultado,
+                'message': 'Parámetros obtenidos exitosamente'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': 'Error al obtener parámetros'
+            }), 400
+        
+    except Exception as error:
+        return jsonify({'success': False, 'message': str(error)}), 500
+
+@app.route('/api/configuracion/actualizarParametro', methods=['POST'])
+def actualizarParametro():
+    try:
+        
+        datos = request.get_json()
+        nombre = datos.get('nombre')
+        valor = datos.get('valor')
+        
+        if not nombre or not valor:
+            return jsonify({'success': False, 'message': 'Nombre y valor requeridos'}), 400
+        
+        parametros = {
+            'inNombre': nombre,
+            'inValor': valor,
+            'inUserName': 'elipoli',
+            'inIP': '25.38.209.9'
+        }
+        
+        resultado, outResultCode = ejecutarSpConResultado('ConfiguracionActualizarParametro', parametros)
+        
+        if outResultCode == 0:
+            return jsonify({
+                'success': True,
+                'message': 'Parámetro actualizado exitosamente'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': 'Error al actualizar parámetro'
+            }), 400
+        
+    except Exception as error:
+        return jsonify({'success': False, 'message': str(error)}), 500
+
+@app.route('/api/configuracion/buscarUsuarios', methods=['POST'])
+def buscarUsuarios():
+    try:
+        
+        datos = request.get_json()
+        busqueda = datos.get('busqueda')
+        
+        if not busqueda:
+            return jsonify({'success': False, 'message': 'Término de búsqueda requerido'}), 400
+        
+        parametros = {
+            'inBusqueda': busqueda,
+            'inUserName': 'elipoli',
+            'inIP': '25.38.209.9'
+        }
+        
+        resultado, outResultCode = ejecutarSpConResultado('ConfiguracionBuscarUsuarios', parametros)
+        
+        if outResultCode == 0:
+            return jsonify({
+                'success': True,
+                'usuarios': resultado,
+                'message': 'Búsqueda completada'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': 'Error en la búsqueda'
+            }), 400
+        
+    except Exception as error:
+        return jsonify({'success': False, 'message': str(error)}), 500
+
+@app.route('/api/configuracion/cambiarEstadoUsuario', methods=['POST'])
+def cambiarEstadoUsuario():
+    try:
+        
+        datos = request.get_json()
+        idUsuario = datos.get('idUsuario')
+        nuevoEstado = datos.get('nuevoEstado')
+        
+        if not idUsuario:
+            return jsonify({'success': False, 'message': 'ID de usuario requerido'}), 400
+        
+        parametros = {
+            'inIDUsuario': idUsuario,
+            'inNuevoEstado': nuevoEstado,
+            'inUserName': 'elipoli',
+            'inIP': '25.38.209.9'
+        }
+        
+        resultado, outResultCode = ejecutarSpConResultado('ConfiguracionCambiarEstadoUsuario', parametros)
+        
+        if outResultCode == 0:
+            return jsonify({
+                'success': True,
+                'message': 'Estado de usuario actualizado exitosamente'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': 'Error al cambiar estado de usuario'
+            }), 400
+        
+    except Exception as error:
+        return jsonify({'success': False, 'message': str(error)}), 500
+
+@app.route('/api/buscarPropiedadesPorDocumento', methods=['POST'])
+def buscarPropiedadesPorDocumento():
+    try:
+        
+        datos = request.get_json()
+        valorDocumento = datos.get('valorDocumento')
+        
+        if not valorDocumento:
+            return jsonify({'success': False, 'message': 'Documento de identidad requerido'}), 400
+        
+        parametros = {
+            'inValorDocumento': valorDocumento,
+            'inUserName': 'elipoli',
+            'inIP': '25.38.209.9'
+        }
+
+        resultado, outResultCode = ejecutarSpConResultado('AdminListarFincasPorDocumento', parametros)
+        
+        if outResultCode == 0:
+            return jsonify({
+                'success': True,
+                'propiedades': resultado,
+                'message': 'Búsqueda exitosa'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': 'No se encontraron propiedades para este documento'
+            }), 404
             
     except Exception as error:
         return jsonify({'success': False, 'message': str(error)}), 500

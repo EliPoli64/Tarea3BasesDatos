@@ -121,7 +121,8 @@ INSERT INTO dbo.Usuario (
 	, EsActivo
 	, IDTipo
 ) VALUES
-	(1, 'elipoli', '12341234', 1, 1);
+	(1, 'elipoli', '12341234', 1, 1)
+	, (2, 'andres', '12341234', 1, 1);
 
 INSERT INTO dbo.TipoAsociacion (
 	[ID]
